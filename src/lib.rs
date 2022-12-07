@@ -1,4 +1,3 @@
-mod point;
 mod lissajou_curve;
 mod app;
 
