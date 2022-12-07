@@ -1,5 +1,6 @@
 use lissajous::run;
+use ggez::GameResult;
 
-fn main() {
+pub fn main() -> GameResult {
     run()
 }
