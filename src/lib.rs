@@ -1,20 +1,22 @@
 mod lissajou_curve;
-mod app;
+mod lissajou_app;
 
 use ggez::conf;
 use ggez::event;
 use ggez::GameResult;
-use app::MainState;
+use lissajou_app::LissajouApp;
+
+const WINDOW_SIZE: f32 = 1800.0;
 
 pub fn run() -> GameResult {
     let cb = ggez::ContextBuilder::new("input_test", "ggez").window_mode(
         conf::WindowMode::default()
             .fullscreen_type(conf::FullscreenType::Windowed)
-            .dimensions(1080.0, 1080.0)
+            .dimensions(WINDOW_SIZE, WINDOW_SIZE)
             .resizable(true),
     );
     let (ctx, event_loop) = cb.build()?;
-    let state = MainState::new();
+    let state = LissajouApp::new();
 
     event::run(ctx, event_loop, state)
 }
