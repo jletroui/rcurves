@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::process::exit;
 use ggez::event::{self, Button, GamepadId};
-use ggez::graphics::{self, Color, DrawParam, Mesh};
+use ggez::graphics::{self, Color, DrawParam, Mesh, MeshBuilder};
 use ggez::{Context, GameResult};
 use ggez::glam::Vec2;
 use ggez::input::keyboard::KeyInput;
@@ -12,7 +13,7 @@ const MAX_DISTANCE: f32 = 200.0;
 const MAX_DISTANCE2: f32 = MAX_DISTANCE * MAX_DISTANCE;
 const D_INCREMENT: f32 = PI / 18.0;
 const POINT_INCREMENT: usize = 100;
-const JITTER_INCREMENT: f32 = 0.01;
+const JITTER_INCREMENT: f32 = 0.002;
 
 pub struct LissajouApp {
     a: f32,
@@ -51,6 +52,7 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         let mid_y = (ctx.gfx.frame().height() as f32) / 2.0;
         let curve = Lissajou::new(mid_x - MARGIN, mid_y - MARGIN, self.a, self.b, self.d, self.random_jitter);
         let point_index = curve.points(self.nb_points);
+        let mut layers = HashMap::new();
 
         for pt in point_index.iter() {
             for (npt, dist2) in point_index.nearest_neighbor_iter_with_distance_2(pt) {
@@ -58,14 +60,21 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
                     break;
                 }
                 let dist = dist2.sqrt();
-                let gray_level = 0.5 * dist / MAX_DISTANCE;
+                let gray_level = 0.6 * dist / MAX_DISTANCE;
                 let transparency_level = 1.0 - dist / MAX_DISTANCE;
                 let color = Color::new(gray_level, gray_level, gray_level, transparency_level);
-                let z = (gray_level * 10.0) as i32;
-                let mesh = Mesh::new_line(ctx, &self.line_for_points(pt, npt), 2.0, color)?;
-                let params = DrawParam::default().dest(Vec2::new(mid_x, mid_y)).z(-z);
-                canvas.draw(&mesh, params)
+                let z = -(gray_level * 5.0) as i32;
+                layers
+                    .entry(z)
+                    .or_insert(MeshBuilder::new())
+                    .line(&self.line_for_points(pt, npt), 2.0, color)?;
             }
+        }
+
+        for layer_z in layers.keys() {
+            let mesh = Mesh::from_data(ctx, layers.get(layer_z).unwrap().build());
+            let params = DrawParam::default().dest(Vec2::new(mid_x, mid_y)).z(*layer_z);
+            canvas.draw(&mesh, params);
         }
 
         canvas.finish(ctx)?;
