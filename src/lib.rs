@@ -1,5 +1,6 @@
 mod lissajou_curve;
 mod lissajou_app;
+mod mesh_source;
 
 use ggez::conf;
 use ggez::event;
