@@ -118,17 +118,24 @@ impl MeshSource for Lissajou {
 
     fn adjust_for_button(self: &mut Self, btn: Button) {
         match btn {
-            Button::DPadDown => { self.a -= 1.0 }
-            Button::DPadUp => { self.a += 1.0 }
-            Button::DPadLeft => { self.b -= 1.0 }
-            Button::DPadRight => { self.b += 1.0 }
-            Button::LeftTrigger => { self.phase_shift -= D_INCREMENT }
-            Button::RightTrigger => { self.phase_shift += D_INCREMENT }
-            Button::South => { self.nb_points -= NB_POINT_INCREMENT }
-            Button::East => { self.nb_points += NB_POINT_INCREMENT }
-            Button::West => { self.jitter_factor -= JITTER_FACTOR_INCREMENT }
-            Button::North => { self.jitter_factor += JITTER_FACTOR_INCREMENT }
+            Button::DPadDown => self.a -= 1.0,
+            Button::DPadUp => self.a += 1.0,
+            Button::DPadLeft => self.b -= 1.0,
+            Button::DPadRight => self.b += 1.0,
+            Button::LeftTrigger => self.phase_shift -= D_INCREMENT,
+            Button::RightTrigger => self.phase_shift += D_INCREMENT,
+            Button::South => self.nb_points -= NB_POINT_INCREMENT,
+            Button::East => self.nb_points += NB_POINT_INCREMENT,
+            Button::West => self.jitter_factor -= JITTER_FACTOR_INCREMENT,
+            Button::North => self.jitter_factor += JITTER_FACTOR_INCREMENT,
             _ => ()
         }
+    }
+
+    fn screenshot_file_name(&self) -> String {
+        format!(
+            "lissajou_a{}_b{}_sft{}_pts{}_jtr{}",
+            self.a, self.b, self.phase_shift, self.nb_points, self.jitter_factor
+        )
     }
 }

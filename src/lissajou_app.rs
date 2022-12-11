@@ -1,10 +1,11 @@
-use std::process::exit;
-
+use std::fs::File;
 use ggez::{Context, GameResult};
 use ggez::event::{self, Button, GamepadId};
 use ggez::glam::Vec2;
-use ggez::graphics::{self, Color, Mesh};
+use ggez::graphics::{self, Canvas, Color, Mesh};
 use ggez::input::keyboard::KeyInput;
+use image::codecs::png::PngEncoder;
+use image::ImageEncoder;
 
 use crate::lissajou_curve::Lissajou;
 use crate::mesh_source::{MeshSource, DrawableMesh};
@@ -13,16 +14,18 @@ const MARGIN_PXL: f32 = 40.0;
 
 pub struct LissajouApp {
     curve: Box<dyn MeshSource>,
+    screen: graphics::ScreenImage,
 }
 
 impl LissajouApp {
-    pub fn new() -> LissajouApp {
+    pub fn new(ctx: &mut Context) -> LissajouApp {
         LissajouApp {
             curve: Box::new(Lissajou::new(2.0, 5.0, 0.0, 0.0, 500)),
+            screen: graphics::ScreenImage::new(ctx, graphics::ImageFormat::Rgba8UnormSrgb, 1., 1., 1),
         }
     }
 
-    fn center(&self, ctx: &Context) -> Vec2 {
+    fn canva_center(&self, ctx: &Context) -> Vec2 {
         Vec2::new(
             (ctx.gfx.frame().width() as f32) / 2.0,
             (ctx.gfx.frame().height() as f32) / 2.0,
@@ -35,6 +38,28 @@ impl LissajouApp {
             (ctx.gfx.frame().height() as f32) - 2.0 * MARGIN_PXL,
         )
     }
+
+    fn save_screenshot(&mut self, ctx: &mut Context) {
+        let mut screenshot_filepath = std::env::current_dir().expect("Find current directory");
+        screenshot_filepath.push(self.curve.screenshot_file_name());
+        screenshot_filepath.set_extension("png");
+        let screenshot_filepath = screenshot_filepath.as_path();
+        let f = File::create(screenshot_filepath).expect("File created");
+        let writer = &mut std::io::BufWriter::new(f);
+
+        let image = self.screen.image(ctx);
+        if image.width() % 64 != 0 {
+            let _missing_pixels = (image.width()/64 + 1) * 64 - image.width();
+            println!("Screenshot has not a width multiple of 64 and cannot be saved")
+            // Pad or something
+        }
+        let pixels = image.to_pixels(ctx).expect("Got pixels");
+        PngEncoder::new(writer)
+            .write_image(&pixels, image.width(), image.height(), ::image::ColorType::Rgba8)
+            .expect("Image written");
+
+        println!("Screenshot written to {}", screenshot_filepath.display())
+    }
 }
 
 impl event::EventHandler<ggez::GameError> for LissajouApp {
@@ -44,12 +69,15 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        let mut canvas = graphics::Canvas::from_frame(ctx, Color::WHITE);
+        let mut canvas = Canvas::from_screen_image(ctx, &mut self.screen, Color::WHITE);
+
         for drawable_mesh in self.curve.meshes(self.curve_size(ctx))? {
             let mesh = Mesh::from_data(ctx, drawable_mesh.meshes());
-            canvas.draw(&mesh, drawable_mesh.params().dest(self.center(ctx)));
+            canvas.draw(&mesh, drawable_mesh.params().dest(self.canva_center(ctx)));
         }
-        canvas.finish(ctx)
+
+        canvas.finish(ctx)?;
+        ctx.gfx.present(&self.screen.image(ctx))
     }
 
     fn key_down_event(&mut self, _ctx: &mut Context, input: KeyInput, repeat: bool) -> GameResult {
@@ -62,12 +90,13 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
 
     fn gamepad_button_down_event(
         &mut self,
-        _ctx: &mut Context,
+        ctx: &mut Context,
         btn: Button,
         _id: GamepadId,
     ) -> GameResult {
         match btn {
-            Button::Select => { exit(0) }
+            Button::Select => ctx.request_quit(),
+            Button::Start => self.save_screenshot(ctx),
             _ => self.curve.adjust_for_button(btn)
         }
         Ok(())
