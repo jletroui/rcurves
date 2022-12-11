@@ -13,11 +13,10 @@ use crate::mesh_source::{DrawableMeshFromBuilder, MeshSource};
 const TWO_PI: f32 = 2.0 * PI;
 const T_OFFSET: f32 = 0.012;
 const END_T: f32 = T_OFFSET + TWO_PI;
-const MAX_DISTANCE: f32 = 200.0;
-const MAX_DISTANCE2: f32 = MAX_DISTANCE * MAX_DISTANCE;
 const D_INCREMENT: f32 = PI / 18.0;
 const NB_POINT_INCREMENT: usize = 100;
 const JITTER_FACTOR_INCREMENT: f32 = 0.002;
+const MAX_DISTANCE_RATIO_INCREMENT: f32 = 0.05;
 
 pub struct Lissajou {
     a: f32,
@@ -25,11 +24,19 @@ pub struct Lissajou {
     phase_shift: f32,
     jitter_factor: f32,
     nb_points: usize,
+    max_distance_ratio: f32,
 }
 
 impl Lissajou {
-    pub fn new(a: f32, b: f32, phase_shift: f32, random_jitter: f32, nb_points: usize) -> Self {
-        Self { a, b, phase_shift, jitter_factor: random_jitter, nb_points }
+    pub fn new() -> Self {
+        Self {
+            a: 2.0,
+            b: 3.0,
+            phase_shift: 0.0,
+            jitter_factor: 0.0,
+            nb_points: 500,
+            max_distance_ratio: 0.2,
+        }
     }
 
     fn jitter(&self, rng: &mut StdRng) -> f32 {
@@ -82,8 +89,8 @@ impl Display for Lissajou {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "a: {} b: {} phase_shift: {} points:  {} jitter: {}",
-            self.a, self.b, self.phase_shift, self.nb_points, self.jitter_factor
+            "a: {} b: {} phase_shift: {} points:  {} jitter: {} max_dist: {}",
+            self.a, self.b, self.phase_shift, self.nb_points, self.jitter_factor, self.max_distance_ratio
         )
     }
 }
@@ -91,14 +98,16 @@ impl Display for Lissajou {
 impl MeshSource for Lissajou {
     fn meshes(self: &Self, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
         let point_index = self.points(size.x / 2.0, size.y / 2.0);
+        let max_distance = size.x * self.max_distance_ratio;
+        let max_distance2 = max_distance * max_distance;
         let mut layers = HashMap::new();
 
         for pt in point_index.iter() {
             for (npt, dist2) in point_index.nearest_neighbor_iter_with_distance_2(pt) {
-                if dist2 > MAX_DISTANCE2 {
+                if dist2 > max_distance2 {
                     break;
                 }
-                let dist_ratio = dist2.sqrt() / MAX_DISTANCE;
+                let dist_ratio = dist2.sqrt() / max_distance;
                 layers
                     .entry(self.z(dist_ratio))
                     .or_insert(MeshBuilder::new())
@@ -128,14 +137,16 @@ impl MeshSource for Lissajou {
             Button::East => self.nb_points += NB_POINT_INCREMENT,
             Button::West => self.jitter_factor -= JITTER_FACTOR_INCREMENT,
             Button::North => self.jitter_factor += JITTER_FACTOR_INCREMENT,
+            Button::LeftTrigger2 => self.max_distance_ratio -= MAX_DISTANCE_RATIO_INCREMENT,
+            Button::RightTrigger2 => self.max_distance_ratio += MAX_DISTANCE_RATIO_INCREMENT,
             _ => ()
         }
     }
 
     fn screenshot_file_name(&self) -> String {
         format!(
-            "lissajou_a{}_b{}_sft{}_pts{}_jtr{}",
-            self.a, self.b, self.phase_shift, self.nb_points, self.jitter_factor
+            "lissajou_a{}_b{}_sft{}_pts{}_jtr{}_dst{}",
+            self.a, self.b, self.phase_shift, self.nb_points, self.jitter_factor, self.max_distance_ratio
         )
     }
 }

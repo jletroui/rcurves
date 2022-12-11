@@ -11,6 +11,7 @@ use crate::lissajou_curve::Lissajou;
 use crate::mesh_source::{MeshSource, DrawableMesh};
 
 const MARGIN_PXL: f32 = 40.0;
+const SCREENSHOT_SIZE: u32 = 2048;
 
 pub struct LissajouApp {
     curve: Box<dyn MeshSource>,
@@ -20,22 +21,22 @@ pub struct LissajouApp {
 impl LissajouApp {
     pub fn new(ctx: &mut Context) -> LissajouApp {
         LissajouApp {
-            curve: Box::new(Lissajou::new(2.0, 5.0, 0.0, 0.0, 500)),
+            curve: Box::new(Lissajou::new()),
             screen: graphics::ScreenImage::new(ctx, graphics::ImageFormat::Rgba8UnormSrgb, 1., 1., 1),
         }
     }
 
-    fn canva_center(&self, ctx: &Context) -> Vec2 {
+    fn canva_center(&self, size: Vec2) -> Vec2 {
         Vec2::new(
-            (ctx.gfx.frame().width() as f32) / 2.0,
-            (ctx.gfx.frame().height() as f32) / 2.0,
+            size.x / 2.0,
+            size.y / 2.0,
         )
     }
 
-    fn curve_size(&self, ctx: &Context) -> Vec2 {
+    fn curve_size(&self, size: Vec2) -> Vec2 {
         Vec2::new(
-            (ctx.gfx.frame().width() as f32) - 2.0 * MARGIN_PXL,
-            (ctx.gfx.frame().height() as f32) - 2.0 * MARGIN_PXL,
+            size.x - 2.0 * MARGIN_PXL,
+            size.y - 2.0 * MARGIN_PXL,
         )
     }
 
@@ -49,13 +50,16 @@ impl LissajouApp {
 
         let image = self.screen.image(ctx);
         if image.width() % 64 != 0 {
-            let _missing_pixels = (image.width()/64 + 1) * 64 - image.width();
+            let _good_width = (image.width()/64 + 1) * 64;
             println!("Screenshot has not a width multiple of 64 and cannot be saved")
             // Pad or something
         }
-        let pixels = image.to_pixels(ctx).expect("Got pixels");
+
+        let pixels = image
+            .to_pixels(ctx)
+            .expect("Got pixels");
         PngEncoder::new(writer)
-            .write_image(&pixels, image.width(), image.height(), ::image::ColorType::Rgba8)
+            .write_image(&pixels, SCREENSHOT_SIZE, SCREENSHOT_SIZE, ::image::ColorType::Rgba8)
             .expect("Image written");
 
         println!("Screenshot written to {}", screenshot_filepath.display())
@@ -69,11 +73,12 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        let size = Vec2::new(ctx.gfx.frame().width() as f32, ctx.gfx.frame().height() as f32);
         let mut canvas = Canvas::from_screen_image(ctx, &mut self.screen, Color::WHITE);
 
-        for drawable_mesh in self.curve.meshes(self.curve_size(ctx))? {
+        for drawable_mesh in self.curve.meshes(self.curve_size(size))? {
             let mesh = Mesh::from_data(ctx, drawable_mesh.meshes());
-            canvas.draw(&mesh, drawable_mesh.params().dest(self.canva_center(ctx)));
+            canvas.draw(&mesh, drawable_mesh.params().dest(self.canva_center(size)));
         }
 
         canvas.finish(ctx)?;
