@@ -9,12 +9,12 @@ use image::ImageEncoder;
 use crate::harmonograph_curve::Harmonograph;
 
 use crate::lissajou_curve::Lissajou;
-use crate::mesh_source::{MeshSource, DrawableMesh};
+use crate::interactive_curve::{InteractiveCurve, DrawableMesh};
 
 const MARGIN_PXL: f32 = 40.0;
 
 pub struct LissajouApp {
-    curves: [Box<dyn MeshSource>; 2],
+    curves: [Box<dyn InteractiveCurve>; 2],
     curve: usize,
     screen: graphics::ScreenImage,
 }
@@ -31,7 +31,7 @@ impl LissajouApp {
         }
     }
 
-    fn curve(&self) -> &Box<dyn MeshSource> {
+    fn curve(&self) -> &Box<dyn InteractiveCurve> {
         &self.curves[self.curve]
     }
 
@@ -43,9 +43,10 @@ impl LissajouApp {
     }
 
     fn curve_size(&self, size: Vec2) -> Vec2 {
+        let min = size.x.min(size.y);
         Vec2::new(
-            size.x - 2.0 * MARGIN_PXL,
-            size.y - 2.0 * MARGIN_PXL,
+            min - 2.0 * MARGIN_PXL,
+            min - 2.0 * MARGIN_PXL,
         )
     }
 

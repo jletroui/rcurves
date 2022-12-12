@@ -4,21 +4,21 @@ use ggez::event::Button;
 use ggez::GameResult;
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawParam, MeshBuilder};
-use crate::mesh_source::{DrawableMeshFromBuilder, MeshSource};
+use crate::interactive_curve::{DrawableMeshFromBuilder, InteractiveCurve};
 
 const AMPLITUDE_INCREMENT: f32 = 0.1;
 const FREQ_INCREMENT: f32 = 1.0;
 const PHASE_INCREMENT: f32 = PI / 18.0;
 const DECAY_INCREMENT: f32 = 0.0002;
-const GRAY_LEVEL: f32 = 0.3;
+const GRAY_LEVEL: f32 = 0.1;
 const COLOR: Color = Color::new(GRAY_LEVEL, GRAY_LEVEL, GRAY_LEVEL, 0.7);
-const AX: usize = 0;
-const AY: usize = 1;
-const BX: usize = 2;
-const BY: usize = 3;
+const PAPERX: usize = 0;
+const PAPERY: usize = 1;
+const PENX: usize = 2;
+const PENY: usize = 3;
 
-const NB_ITER: u32 = 20000;
-const T_STEP: f32 = 0.02;
+const NB_ITER: u32 = 30000;
+const T_STEP: f32 = 0.015;
 
 struct Pendulum {
     name: String,
@@ -42,7 +42,7 @@ impl Display for Pendulum {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[{}] amp: {} freq (A/B): {} phase (X/Y): {} decay (LT/RT): {}",
+            "HARMONOGRAPH {:<10} amp (A / B): {:<6.4} freq (L / R): {:<6} phase (LT / RT): {:<6.4} decay (X / Y): {:<6.4}",
             self.name, self.amp, self.freq, self.phase, self.decay
         )
     }
@@ -57,10 +57,10 @@ impl Harmonograph {
     pub fn new() -> Self {
         Self {
             pendulums: [
-                Pendulum::new(String::from("AX"), 0.25, 7.5, 0.0, 0.0004),
-                Pendulum::new(String::from("AY"), 0.25, 4.0, 0.0, 0.0004),
-                Pendulum::new(String::from("BX"), 0.75, 1.001, 0.0, 0.0004),
-                Pendulum::new(String::from("BY"), 0.75, 2.0, 0.0, 0.0004),
+                Pendulum::new(String::from("[Paper-X]"), 0.25, 7.5, 0.0, 0.0004),
+                Pendulum::new(String::from("[Paper-Y]"), 0.25, 4.0, 0.0, 0.0004),
+                Pendulum::new(String::from("[Pen-X]"), 0.75, 1.001, 0.0, 0.0004),
+                Pendulum::new(String::from("[Pen-Y]"), 0.75, 2.0, 0.0, 0.0004),
             ],
             displayed_pendulum: 0,
         }
@@ -68,8 +68,8 @@ impl Harmonograph {
 
     fn point(self: &Self, radius_x: f32, radius_y: f32, t: f32) -> Vec2 {
         return Vec2::new(
-            radius_x * (self.pendulums[AX].position(t) + self.pendulums[BX].position(t)),
-            radius_y * (self.pendulums[AY].position(t) + self.pendulums[BY].position(t)),
+            radius_x * (self.pendulums[PAPERX].position(t) + self.pendulums[PENX].position(t)),
+            radius_y * (self.pendulums[PAPERY].position(t) + self.pendulums[PENY].position(t)),
         )
     }
 
@@ -84,7 +84,7 @@ impl Display for Harmonograph {
     }
 }
 
-impl MeshSource for Harmonograph {
+impl InteractiveCurve for Harmonograph {
     fn meshes(self: &Self, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
         let mut builder = MeshBuilder::new();
         builder.line(&self.points(size.x / 2.0, size.y / 2.0), 1.0, COLOR)?;
@@ -94,29 +94,33 @@ impl MeshSource for Harmonograph {
 
     fn adjust_for_button(self: &mut Self, btn: Button) {
         match btn {
-            Button::DPadDown => self.displayed_pendulum = AY,
-            Button::DPadUp => self.displayed_pendulum = AX,
-            Button::DPadLeft => self.displayed_pendulum = BY,
-            Button::DPadRight => self.displayed_pendulum = BX,
-            Button::LeftTrigger => self.pendulums[self.displayed_pendulum].decay -= DECAY_INCREMENT,
-            Button::RightTrigger => self.pendulums[self.displayed_pendulum].decay += DECAY_INCREMENT,
-            Button::South => self.pendulums[self.displayed_pendulum].freq -= FREQ_INCREMENT,
-            Button::East => self.pendulums[self.displayed_pendulum].freq += FREQ_INCREMENT,
-            Button::West => self.pendulums[self.displayed_pendulum].phase -= PHASE_INCREMENT,
-            Button::North => self.pendulums[self.displayed_pendulum].phase += PHASE_INCREMENT,
-            // Button::LeftTrigger2 => self.pendulums[self.displayed_pendulum].amp -= DECAY_INCREMENT,
-            // Button::RightTrigger2 => self.pendulums[self.displayed_pendulum].amp += DECAY_INCREMENT,
+            Button::DPadUp => self.displayed_pendulum = if self.displayed_pendulum > 0 { self.displayed_pendulum - 1 } else { 0 },
+            Button::DPadDown => self.displayed_pendulum = if self.displayed_pendulum < 3 { self.displayed_pendulum + 1 } else { 3 },
+            Button::DPadLeft => self.pendulums[self.displayed_pendulum].freq -= FREQ_INCREMENT,
+            Button::DPadRight => self.pendulums[self.displayed_pendulum].freq += FREQ_INCREMENT,
+            Button::West => self.pendulums[self.displayed_pendulum].decay -= DECAY_INCREMENT,
+            Button::North => self.pendulums[self.displayed_pendulum].decay += DECAY_INCREMENT,
+            Button::LeftTrigger => self.pendulums[self.displayed_pendulum].phase -= PHASE_INCREMENT,
+            Button::RightTrigger => self.pendulums[self.displayed_pendulum].phase += PHASE_INCREMENT,
+            Button::South => {
+                self.pendulums[self.displayed_pendulum].amp -= AMPLITUDE_INCREMENT;
+                self.pendulums[(self.displayed_pendulum + 2) % 4].amp += AMPLITUDE_INCREMENT;
+            },
+            Button::East => {
+                self.pendulums[self.displayed_pendulum].amp += AMPLITUDE_INCREMENT;
+                self.pendulums[(self.displayed_pendulum + 2) % 4].amp -= AMPLITUDE_INCREMENT;
+            },
             _ => ()
         }
     }
 
     fn screenshot_file_name(&self) -> String {
         format!(
-            "armono_ax_amp{}_freq{}_ph{}_dec{}_ay_amp{}_freq{}_ph{}_dec{}_bx_amp{}_freq{}_ph{}_dec{}_by_amp{}_freq{}_ph{}_dec{}",
-            self.pendulums[AX].amp, self.pendulums[AX].freq, self.pendulums[AX].phase, self.pendulums[AX].decay,
-            self.pendulums[AY].amp, self.pendulums[AY].freq, self.pendulums[AY].phase, self.pendulums[AY].decay,
-            self.pendulums[BX].amp, self.pendulums[BX].freq, self.pendulums[BX].phase, self.pendulums[BX].decay,
-            self.pendulums[BY].amp, self.pendulums[BY].freq, self.pendulums[BY].phase, self.pendulums[BY].decay
+            "armono_paperx_amp{}_freq{}_ph{}_dec{}_papery_amp{}_freq{}_ph{}_dec{}_penx_amp{}_freq{}_ph{}_dec{}_peny_amp{}_freq{}_ph{}_dec{}",
+            self.pendulums[PAPERX].amp, self.pendulums[PAPERX].freq, self.pendulums[PAPERX].phase, self.pendulums[PAPERX].decay,
+            self.pendulums[PAPERY].amp, self.pendulums[PAPERY].freq, self.pendulums[PAPERY].phase, self.pendulums[PAPERY].decay,
+            self.pendulums[PENX].amp, self.pendulums[PENX].freq, self.pendulums[PENX].phase, self.pendulums[PENX].decay,
+            self.pendulums[PENY].amp, self.pendulums[PENY].freq, self.pendulums[PENY].phase, self.pendulums[PENY].decay
         )
     }
 }
