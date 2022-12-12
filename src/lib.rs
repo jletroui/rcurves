@@ -1,3 +1,4 @@
+mod harmonograph_curve;
 mod lissajou_curve;
 mod lissajou_app;
 mod mesh_source;

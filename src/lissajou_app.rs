@@ -6,24 +6,33 @@ use ggez::graphics::{self, Canvas, Color, Mesh};
 use ggez::input::keyboard::KeyInput;
 use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
+use crate::harmonograph_curve::Harmonograph;
 
 use crate::lissajou_curve::Lissajou;
 use crate::mesh_source::{MeshSource, DrawableMesh};
 
 const MARGIN_PXL: f32 = 40.0;
-const SCREENSHOT_SIZE: u32 = 2048;
 
 pub struct LissajouApp {
-    curve: Box<dyn MeshSource>,
+    curves: [Box<dyn MeshSource>; 2],
+    curve: usize,
     screen: graphics::ScreenImage,
 }
 
 impl LissajouApp {
     pub fn new(ctx: &mut Context) -> LissajouApp {
         LissajouApp {
-            curve: Box::new(Lissajou::new()),
+            curves: [
+                Box::new(Lissajou::new()),
+                Box::new(Harmonograph::new()),
+            ],
+            curve: 0,
             screen: graphics::ScreenImage::new(ctx, graphics::ImageFormat::Rgba8UnormSrgb, 1., 1., 1),
         }
+    }
+
+    fn curve(&self) -> &Box<dyn MeshSource> {
+        &self.curves[self.curve]
     }
 
     fn canva_center(&self, size: Vec2) -> Vec2 {
@@ -42,7 +51,7 @@ impl LissajouApp {
 
     fn save_screenshot(&mut self, ctx: &mut Context) {
         let mut screenshot_filepath = std::env::current_dir().expect("Find current directory");
-        screenshot_filepath.push(self.curve.screenshot_file_name());
+        screenshot_filepath.push(self.curve().screenshot_file_name());
         screenshot_filepath.set_extension("png");
         let screenshot_filepath = screenshot_filepath.as_path();
         let f = File::create(screenshot_filepath).expect("File created");
@@ -59,7 +68,7 @@ impl LissajouApp {
             .to_pixels(ctx)
             .expect("Got pixels");
         PngEncoder::new(writer)
-            .write_image(&pixels, SCREENSHOT_SIZE, SCREENSHOT_SIZE, ::image::ColorType::Rgba8)
+            .write_image(&pixels, image.width(), image.height(), ::image::ColorType::Rgba8)
             .expect("Image written");
 
         println!("Screenshot written to {}", screenshot_filepath.display())
@@ -68,7 +77,7 @@ impl LissajouApp {
 
 impl event::EventHandler<ggez::GameError> for LissajouApp {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        ctx.gfx.window().set_title(&format!("{}", self.curve));
+        ctx.gfx.window().set_title(&format!("{}", self.curve()));
         Ok(())
     }
 
@@ -76,7 +85,7 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         let size = Vec2::new(ctx.gfx.frame().width() as f32, ctx.gfx.frame().height() as f32);
         let mut canvas = Canvas::from_screen_image(ctx, &mut self.screen, Color::WHITE);
 
-        for drawable_mesh in self.curve.meshes(self.curve_size(size))? {
+        for drawable_mesh in self.curve().meshes(self.curve_size(size))? {
             let mesh = Mesh::from_data(ctx, drawable_mesh.meshes());
             canvas.draw(&mesh, drawable_mesh.params().dest(self.canva_center(size)));
         }
@@ -100,9 +109,9 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         _id: GamepadId,
     ) -> GameResult {
         match btn {
-            Button::Select => ctx.request_quit(),
+            Button::Select => self.curve = (self.curve + 1) % self.curves.len(),
             Button::Start => self.save_screenshot(ctx),
-            _ => self.curve.adjust_for_button(btn)
+            _ => self.curves[self.curve].adjust_for_button(btn)
         }
         Ok(())
     }
