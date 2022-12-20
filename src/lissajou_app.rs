@@ -1,13 +1,13 @@
 use std::fs::File;
 use ggez::{Context, GameResult};
-use ggez::event::{self, Button, GamepadId};
+use ggez::event::{self, Button, Axis, GamepadId};
 use ggez::glam::Vec2;
 use ggez::graphics::{self, Canvas, Color, Mesh};
 use ggez::input::keyboard::KeyInput;
 use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
-use crate::harmonograph_curve::Harmonograph;
 
+use crate::harmonograph_curve::Harmonograph;
 use crate::lissajou_curve::Lissajou;
 use crate::interactive_curve::{InteractiveCurve, DrawableMesh};
 
@@ -114,6 +114,17 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
             Button::Start => self.save_screenshot(ctx),
             _ => self.curves[self.curve].adjust_for_button(btn)
         }
+        Ok(())
+    }
+
+    fn gamepad_axis_event(
+        &mut self,
+        _ctx: &mut Context,
+        axis: Axis,
+        value: f32,
+        _id: GamepadId,
+    ) -> GameResult {
+        self.curves[self.curve].adjust_for_axis(axis, value);
         Ok(())
     }
 }
