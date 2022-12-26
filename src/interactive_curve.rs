@@ -5,7 +5,7 @@ use ggez::glam::Vec2;
 use ggez::graphics::{DrawParam, MeshBuilder, MeshData};
 
 pub trait InteractiveCurve<T: DrawableMesh = DrawableMeshFromBuilder>: Display {
-    fn meshes(self: &Self, size: Vec2) -> GameResult<Vec<T>>;
+    fn meshes(self: &Self, dest: Vec2, size: Vec2) -> GameResult<Vec<T>>;
     fn adjust_for_button(self: &mut Self, btn: Button);
     fn adjust_for_axis(self: &mut Self, _axis: Axis, _value: f32) {
         // Default do nothing

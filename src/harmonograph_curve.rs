@@ -6,9 +6,8 @@ use ggez::GameResult;
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawParam, MeshBuilder};
 use crate::interactive_curve::{DrawableMeshFromBuilder, InteractiveCurve};
+use crate::color_picker::{ColorPicker, HSV};
 
-const GRAY_LEVEL: f32 = 0.1;
-const COLOR: Color = Color::new(GRAY_LEVEL, GRAY_LEVEL, GRAY_LEVEL, 0.7);
 const PAPERX: usize = 0;
 const PAPERY: usize = 1;
 const PENX: usize = 2;
@@ -17,12 +16,16 @@ const AMP: usize = 0;
 const FREQ: usize = 1;
 const PHASE: usize = 2;
 const DECAY: usize = 3;
+const START_COLOR: usize = 4;
+const END_COLOR: usize = 5;
 const EPSILON: f32 = 0.01;
-const PARAM_NAMES: [&'static str; 4] = [
-    "< [amp]  freq   phase   decay  >",
-    "<  amp  [freq]  phase   decay  >",
-    "<  amp   freq  [phase]  decay  >",
-    "<  amp   freq   phase  [decay] >",
+const PARAM_NAMES: [&'static str; 6] = [
+    "< [amp]  freq   phase   decay   startColor   endColor >",
+    "<  amp  [freq]  phase   decay   startColor   endColor >",
+    "<  amp   freq  [phase]  decay   startColor   endColor >",
+    "<  amp   freq   phase  [decay]  startColor   endColor >",
+    "<  amp   freq   phase   decay  [startColor]  endColor >",
+    "<  amp   freq   phase   decay   startColor  [endColor]>",
 ];
 
 const NB_ITER: u32 = 30000;
@@ -58,9 +61,11 @@ impl Pendulum {
 pub struct Harmonograph {
     pendulums: [Pendulum; 4],
     displayed_param: usize,
-    fixing_values: bool,
+    pinning_values: bool,
     values: HashMap<Axis, f32>,
     axis_to_pendulum: HashMap<Axis, usize>,
+    start_color_picker: ColorPicker,
+    end_color_picker: ColorPicker,
 }
 
 impl Harmonograph {
@@ -73,7 +78,7 @@ impl Harmonograph {
                 Pendulum::new(0.75, 2.0, 0.0, 0.0004),
             ],
             displayed_param: AMP,
-            fixing_values: false,
+            pinning_values: false,
             values: HashMap::new(),
             axis_to_pendulum: [
                 (Axis::LeftStickX, PAPERX),
@@ -81,6 +86,8 @@ impl Harmonograph {
                 (Axis::RightStickX, PENX),
                 (Axis::RightStickY, PENY),
             ].iter().cloned().collect(),
+            start_color_picker: ColorPicker::new(HSV::new(180.0, 0.75, 0.75)),
+            end_color_picker: ColorPicker::new(HSV::new(60.0, 0.75, 0.75)),
         }
     }
 
@@ -91,13 +98,43 @@ impl Harmonograph {
         )
     }
 
-    fn points(self: &Self, radius_x: f32, radius_y: f32) -> Vec<Vec2> {
-        (0..NB_ITER).map(|i| self.point(radius_x, radius_y, (i as f32) * T_STEP)).collect()
+    fn color(&self, t: f32) -> Color {
+        let t = t % (2.0 * PI);
+        let interpolation = if t <= PI {
+            t / PI
+        } else {
+            1.0 - (t - PI) / PI
+        };
+        let start_color = self.start_color_picker.color();
+        let end_color = self.end_color_picker.color();
+        let interpolate = |start: f32, end: f32| start + interpolation  * (end - start);
+        Color::new(
+            interpolate(start_color.r, end_color.r),
+            interpolate(start_color.g, end_color.g),
+            interpolate(start_color.b, end_color.b),
+            1.0
+        )
     }
 
     fn normalize(value: f32, upper: f32) -> f32 {
         let norm = (value + 1.0) / 2.0;
         return norm * upper;
+    }
+
+    fn adjust_start_color_for_axis(&mut self, axis: Axis, value: f32) {
+        match axis {
+            Axis::LeftStickX    => self.start_color_picker.adjust_hue(Harmonograph::normalize(value, 359.9)),
+            Axis::LeftStickY    => self.start_color_picker.adjust_saturation(1.0 - Harmonograph::normalize(value, 1.0)),
+            _ => ()
+        }
+    }
+
+    fn adjust_end_color_for_axis(&mut self, axis: Axis, value: f32) {
+        match axis {
+            Axis::LeftStickX    => self.end_color_picker.adjust_hue(Harmonograph::normalize(value, 359.9)),
+            Axis::LeftStickY    => self.end_color_picker.adjust_saturation(1.0 - Harmonograph::normalize(value, 1.0)),
+            _ => ()
+        }
     }
 
     fn adjust_amp_for_axis(&mut self, axis: Axis, value: f32) {
@@ -134,41 +171,80 @@ impl Harmonograph {
 
 impl Display for Harmonograph {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "HARMONOGRAPH {} [Paper] x {:<6.4} y {:<6.4} [Pen] x {:<6.4} y {:<6.4}",
-            PARAM_NAMES[self.displayed_param],
-            self.pendulums[PAPERX].param_value(self.displayed_param),
-            self.pendulums[PAPERY].param_value(self.displayed_param),
-            self.pendulums[PENX].param_value(self.displayed_param),
-            self.pendulums[PENY].param_value(self.displayed_param),
-        )
+        if self.displayed_param < START_COLOR {
+            write!(
+                f,
+                "HARMONOGRAPH {} [Paper] x {:<6.4} y {:<6.4} [Pen] x {:<6.4} y {:<6.4}",
+                PARAM_NAMES[self.displayed_param],
+                self.pendulums[PAPERX].param_value(self.displayed_param),
+                self.pendulums[PAPERY].param_value(self.displayed_param),
+                self.pendulums[PENX].param_value(self.displayed_param),
+                self.pendulums[PENY].param_value(self.displayed_param),
+            )
+        }
+        else {
+            write!(
+                f,
+                "HARMONOGRAPH {}",
+                PARAM_NAMES[self.displayed_param],
+            )
+
+        }
     }
 }
 
 impl InteractiveCurve for Harmonograph {
-    fn meshes(self: &Self, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+    fn meshes(self: &Self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+        let radius = size / 2.0;
         let mut builder = MeshBuilder::new();
-        builder.line(&self.points(size.x / 2.0, size.y / 2.0), 1.0, COLOR)?;
-        let mesh = DrawableMeshFromBuilder::new(builder, DrawParam::default());
-        Ok(vec!(mesh))
+        let mut previous_pt = self.point(radius.x, radius.y, 0.0);
+        for i in 0..NB_ITER {
+            let t = (i as f32) * T_STEP;
+            let pt = self.point(radius.x, radius.y, t);
+            builder.line(&[previous_pt, pt], 1.0, self.color(t))?;
+            previous_pt = pt;
+        }
+        let mesh = DrawableMeshFromBuilder::new(builder, DrawParam::new().dest(dest));
+
+        match self.displayed_param {
+            START_COLOR => {
+                let min_size = size.min_element();
+                let picker_size = min_size / 3.0;
+                let picker_dest = Vec2::new(dest.x - min_size / 4.0, dest.y);
+                let start_meshes = self.start_color_picker.meshes(picker_size, picker_dest)?;
+                Ok(vec!(mesh, start_meshes))
+            }
+            END_COLOR => {
+                let min_size = size.min_element();
+                let picker_size = min_size / 3.0;
+                let picker_dest = Vec2::new(dest.x + min_size / 4.0, dest.y);
+                let end_meshes = self.end_color_picker.meshes(picker_size, picker_dest)?;
+                Ok(vec!(mesh, end_meshes))
+            }
+            _ => Ok(vec!(mesh))
+        }
     }
 
     fn adjust_for_button(self: &mut Self, btn: Button) {
         match btn {
             Button::DPadLeft  => if self.displayed_param > 0 { self.displayed_param = self.displayed_param - 1 },
-            Button::DPadRight => if self.displayed_param < 3 { self.displayed_param = self.displayed_param + 1 },
-            Button::LeftTrigger | Button::RightTrigger => self.fixing_values = true,
+            Button::DPadRight => if self.displayed_param < 5 { self.displayed_param = self.displayed_param + 1 },
+            Button::LeftTrigger | Button::RightTrigger => self.pinning_values = true,
+            Button::South if self.displayed_param == START_COLOR => self.start_color_picker.incr_value(-0.25),
+            Button::East if self.displayed_param == START_COLOR => self.start_color_picker.incr_value(0.25),
+            Button::South if self.displayed_param == END_COLOR => self.end_color_picker.incr_value(-0.25),
+            Button::East if self.displayed_param == END_COLOR => self.end_color_picker.incr_value(0.25),
             _ => ()
         }
     }
 
     fn adjust_for_axis(self: &mut Self, axis: Axis, value: f32) {
         self.values.insert(axis, value);
-        let all_zeroes = self.values.values().all(|v| v.abs() < EPSILON);
-        if self.fixing_values {
+
+        if self.pinning_values {
+            let all_zeroes = self.values.values().all(|v| v.abs() < EPSILON);
             if all_zeroes {
-                self.fixing_values = false;
+                self.pinning_values = false;
             }
             else {
                 return
@@ -180,6 +256,8 @@ impl InteractiveCurve for Harmonograph {
                 FREQ => self.adjust_freq_for_axis(axis, value),
                 PHASE => self.adjust_phase_for_axis(axis, value),
                 DECAY => self.adjust_decay_for_axis(axis, value),
+                START_COLOR => self.adjust_start_color_for_axis(axis, value),
+                END_COLOR => self.adjust_end_color_for_axis(axis, value),
                 unknown => panic!("Tried to adjust unknown axis {} in Harmonograph", unknown),
             }
         }

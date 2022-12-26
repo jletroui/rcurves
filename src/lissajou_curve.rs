@@ -99,7 +99,7 @@ impl Display for Lissajou {
 }
 
 impl InteractiveCurve for Lissajou {
-    fn meshes(self: &Self, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+    fn meshes(self: &Self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
         let point_index = self.points(size.x / 2.0, size.y / 2.0);
         let max_distance = size.x * self.max_distance_ratio;
         let max_distance2 = max_distance * max_distance;
@@ -122,7 +122,7 @@ impl InteractiveCurve for Lissajou {
             layers
                 .drain()
                 .map(|(z, builder)|
-                    DrawableMeshFromBuilder::new(builder, DrawParam::default().z(z))
+                    DrawableMeshFromBuilder::new(builder, DrawParam::new().dest(dest).z(z))
                 )
                 .collect()
         )

@@ -86,9 +86,9 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         let size = Vec2::new(ctx.gfx.frame().width() as f32, ctx.gfx.frame().height() as f32);
         let mut canvas = Canvas::from_screen_image(ctx, &mut self.screen, Color::WHITE);
 
-        for drawable_mesh in self.curve().meshes(self.curve_size(size))? {
+        for drawable_mesh in self.curve().meshes(self.canva_center(size), self.curve_size(size))? {
             let mesh = Mesh::from_data(ctx, drawable_mesh.meshes());
-            canvas.draw(&mesh, drawable_mesh.params().dest(self.canva_center(size)));
+            canvas.draw(&mesh, drawable_mesh.params());
         }
 
         canvas.finish(ctx)?;
