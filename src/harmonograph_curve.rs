@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
-use ggez::event::{Axis, Button};
+use ggez::event::{Axis, Button, MouseButton};
 use ggez::GameResult;
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawParam, MeshBuilder};
@@ -194,7 +194,7 @@ impl Display for Harmonograph {
 }
 
 impl InteractiveCurve for Harmonograph {
-    fn meshes(self: &Self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+    fn meshes(&mut self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
         let radius = size / 2.0;
         let mut builder = MeshBuilder::new();
         let mut previous_pt = self.point(radius.x, radius.y, 0.0);
@@ -259,6 +259,17 @@ impl InteractiveCurve for Harmonograph {
                 START_COLOR => self.adjust_start_color_for_axis(axis, value),
                 END_COLOR => self.adjust_end_color_for_axis(axis, value),
                 unknown => panic!("Tried to adjust unknown axis {} in Harmonograph", unknown),
+            }
+        }
+    }
+
+    fn adjust_for_mouse_button_up(self: &mut Self, button: MouseButton, x: f32, y: f32) {
+        if button == MouseButton::Left {
+            if self.displayed_param == START_COLOR {
+                self.start_color_picker.adjust_for_click(x, y);
+            }
+            if self.displayed_param == END_COLOR {
+                self.end_color_picker.adjust_for_click(x, y);
             }
         }
     }

@@ -1,9 +1,8 @@
 use std::fs::File;
 use ggez::{Context, GameResult};
-use ggez::event::{self, Button, Axis, GamepadId};
+use ggez::event::{self, Button, Axis, GamepadId, MouseButton};
 use ggez::glam::Vec2;
 use ggez::graphics::{self, Canvas, Color, Mesh};
-use ggez::input::keyboard::KeyInput;
 use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
 
@@ -31,7 +30,7 @@ impl LissajouApp {
         }
     }
 
-    fn curve(&self) -> &Box<dyn InteractiveCurve> {
+    fn curve(&mut self) -> &Box<dyn InteractiveCurve> {
         &self.curves[self.curve]
     }
 
@@ -86,7 +85,7 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         let size = Vec2::new(ctx.gfx.frame().width() as f32, ctx.gfx.frame().height() as f32);
         let mut canvas = Canvas::from_screen_image(ctx, &mut self.screen, Color::WHITE);
 
-        for drawable_mesh in self.curve().meshes(self.canva_center(size), self.curve_size(size))? {
+        for drawable_mesh in self.curves[self.curve].meshes(self.canva_center(size), self.curve_size(size))? {
             let mesh = Mesh::from_data(ctx, drawable_mesh.meshes());
             canvas.draw(&mesh, drawable_mesh.params());
         }
@@ -95,11 +94,14 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         ctx.gfx.present(&self.screen.image(ctx))
     }
 
-    fn key_down_event(&mut self, _ctx: &mut Context, input: KeyInput, repeat: bool) -> GameResult {
-        println!(
-            "Key pressed: scancode {}, keycode {:?}, modifier {:?}, repeat: {}",
-            input.scancode, input.keycode, input.mods, repeat
-        );
+    fn mouse_button_up_event(
+        &mut self,
+        _ctx: &mut Context,
+        button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> GameResult {
+        self.curves[self.curve].adjust_for_mouse_button_up(button, x, y);
         Ok(())
     }
 

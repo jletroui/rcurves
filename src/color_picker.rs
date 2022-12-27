@@ -31,12 +31,16 @@ impl HSV {
 
 pub struct ColorPicker {
     current_pick: HSV,
+    last_size: f32,
+    last_dest: Vec2,
 }
 
 impl ColorPicker {
     pub fn new(current_pick: HSV) -> ColorPicker {
         ColorPicker {
-            current_pick
+            current_pick,
+            last_size: 0.0,
+            last_dest: Vec2::new(0.0, 0.0),
         }
     }
 
@@ -69,8 +73,10 @@ impl ColorPicker {
         DrawParam::new().dest(left_top_dest).scale(scaling)
     }
 
-    pub fn meshes(&self, size: f32, dest: Vec2) -> GameResult<DrawableMeshFromBuilder> {
+    pub fn meshes(&mut self, size: f32, dest: Vec2) -> GameResult<DrawableMeshFromBuilder> {
         let mut builder = MeshBuilder::new();
+        self.last_size = size;
+        self.last_dest = dest;
 
         // Color space
         for hi in 0..STEPS_H {
@@ -107,6 +113,17 @@ impl ColorPicker {
 
     pub fn adjust_saturation(&mut self, saturation: f32) {
         self.current_pick.saturation = saturation;
+    }
+
+    pub fn adjust_for_click(&mut self, x: f32, y: f32) {
+        let left_top_dest = self.last_dest - self.last_size / 2.0;
+        let space_area = Rect::new(left_top_dest.x, left_top_dest.y, self.last_size * SPACE_SIZE, self.last_size * SPACE_SIZE);
+        if space_area.contains(Vec2::new(x, y)) {
+            let diff_x = x - left_top_dest.x;
+            let diff_y = y - left_top_dest.y;
+            self.adjust_hue(diff_x / (self.last_size * SPACE_SIZE) * 360.0);
+            self.adjust_saturation(diff_y / (self.last_size * SPACE_SIZE))
+        }
     }
 
     pub fn incr_value(&mut self, incr: f32) {
