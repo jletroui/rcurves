@@ -39,11 +39,12 @@ impl Lissajou {
         }
     }
 
-    fn jitter(&self, rng: &mut StdRng) -> f32 {
+    fn jitter(&self, rng: &mut StdRng, factor_amp: f32) -> f32 {
         if self.jitter_factor == 0.0 {
             return 1.0
         }
-        rng.gen_range((1.0 - self.jitter_factor.abs())..(1.0 + self.jitter_factor.abs()))
+        let jitter_factor = f32::abs(self.jitter_factor) * factor_amp;
+        rng.gen_range((1.0 - jitter_factor)..(1.0 + jitter_factor))
     }
 
     fn color(&self, dist_ratio: f32) -> Color {
@@ -57,12 +58,14 @@ impl Lissajou {
     }
 
     fn point(self: &Self, radius_x: f32, radius_y: f32, t: f32, rng: &mut StdRng) -> (f32, f32) {
-        let a = self.freq[FREQ_X] * self.jitter(rng);
-        let b = self.freq[FREQ_Y] * self.jitter(rng);
+        let rx = radius_x * self.jitter(rng, 1.4);
+        let ry = radius_y * self.jitter(rng, 1.4);
+        let a = self.freq[FREQ_X] * self.jitter(rng, 1.0);
+        let b = self.freq[FREQ_Y] * self.jitter(rng, 1.0);
 
         return (
-            radius_x * f32::sin(a * t + self.phase),
-            radius_y * f32::sin(b * t),
+            rx * f32::sin(a * t + self.phase),
+            ry * f32::sin(b * t),
         )
     }
 
@@ -135,7 +138,11 @@ impl InteractiveCurve for Lissajou {
             Button::RightTrigger    => self.phase += D_INCREMENT,
             Button::LeftTrigger2    => self.nb_points -= NB_POINT_INCREMENT,
             Button::RightTrigger2   => self.nb_points += NB_POINT_INCREMENT,
-            Button::West            => if self.jitter_factor >= JITTER_FACTOR_INCREMENT { self.jitter_factor -= JITTER_FACTOR_INCREMENT },
+            Button::West            => if self.jitter_factor >= JITTER_FACTOR_INCREMENT {
+                self.jitter_factor -= JITTER_FACTOR_INCREMENT
+            } else {
+                self.jitter_factor = 0.0;
+            },
             Button::North           => self.jitter_factor += JITTER_FACTOR_INCREMENT,
             Button::South           => self.max_distance_ratio -= MAX_DISTANCE_RATIO_INCREMENT,
             Button::East            => self.max_distance_ratio += MAX_DISTANCE_RATIO_INCREMENT,
