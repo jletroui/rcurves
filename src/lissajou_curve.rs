@@ -19,11 +19,9 @@ const JITTER_FACTOR_INCREMENT: f32 = 0.002;
 const MAX_DISTANCE_RATIO_INCREMENT: f32 = 0.05;
 const FREQ_X: usize = 0;
 const FREQ_Y: usize = 1;
-const FREQ_NAMES: [&str; 2] = ["freq-X", "freq-Y"];
 
 pub struct Lissajou {
     freq: [f32; 2],
-    freq_idx: usize,
     phase: f32,
     jitter_factor: f32,
     nb_points: usize,
@@ -34,7 +32,6 @@ impl Lissajou {
     pub fn new() -> Self {
         Self {
             freq: [2.0, 3.0],
-            freq_idx: 0,
             phase: 0.0,
             jitter_factor: 0.0,
             nb_points: 500,
@@ -92,8 +89,8 @@ impl Display for Lissajou {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "LISSAJOU {} (L / R): {:<5} phase (LT / RT): {:<5} points (BLT / BRT): {:<5} jitter (X / Y): {:<5} max_dist (A / B): {:<5}",
-            FREQ_NAMES[self.freq_idx], self.freq[self.freq_idx], self.phase, self.nb_points, self.jitter_factor, self.max_distance_ratio
+            "LISSAJOU freq-X (U / D): {:<5} freq-Y (L / R): {:<5} phase (LT / RT): {:<5} points (BLT / BRT): {:<5} jitter (X / Y): {:<5} max_dist (A / B): {:<5}",
+            self.freq[FREQ_X], self.freq[FREQ_Y], self.phase, self.nb_points, self.jitter_factor, self.max_distance_ratio
         )
     }
 }
@@ -130,10 +127,10 @@ impl InteractiveCurve for Lissajou {
 
     fn adjust_for_button(self: &mut Self, btn: Button) {
         match btn {
-            Button::DPadDown        => self.freq_idx = FREQ_Y,
-            Button::DPadUp          => self.freq_idx = FREQ_X,
-            Button::DPadLeft        => self.freq[self.freq_idx] -= 1.0,
-            Button::DPadRight       => self.freq[self.freq_idx] += 1.0,
+            Button::DPadDown        => self.freq[FREQ_X] -= 1.0,
+            Button::DPadUp          => self.freq[FREQ_X] += 1.0,
+            Button::DPadLeft        => self.freq[FREQ_Y] -= 1.0,
+            Button::DPadRight       => self.freq[FREQ_Y] += 1.0,
             Button::LeftTrigger     => self.phase -= D_INCREMENT,
             Button::RightTrigger    => self.phase += D_INCREMENT,
             Button::LeftTrigger2    => self.nb_points -= NB_POINT_INCREMENT,
