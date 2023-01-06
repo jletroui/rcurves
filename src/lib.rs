@@ -3,6 +3,7 @@ extern crate core;
 mod interactive_curve;
 mod harmonograph_curve;
 mod lissajou_curve;
+mod dejong_curve;
 mod lissajou_app;
 mod color_picker;
 

@@ -5,6 +5,7 @@ use ggez::glam::Vec2;
 use ggez::graphics::{self, Canvas, Color, Mesh};
 use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
+use crate::dejong_curve::DeJongAttractor;
 
 use crate::harmonograph_curve::Harmonograph;
 use crate::lissajou_curve::Lissajou;
@@ -13,7 +14,7 @@ use crate::interactive_curve::{InteractiveCurve, DrawableMesh};
 const MARGIN_PXL: f32 = 40.0;
 
 pub struct LissajouApp {
-    curves: [Box<dyn InteractiveCurve>; 2],
+    curves: [Box<dyn InteractiveCurve>; 3],
     curve: usize,
     screen: graphics::ScreenImage,
 }
@@ -22,6 +23,7 @@ impl LissajouApp {
     pub fn new(ctx: &mut Context) -> LissajouApp {
         LissajouApp {
             curves: [
+                Box::new(DeJongAttractor::new()),
                 Box::new(Lissajou::new()),
                 Box::new(Harmonograph::new()),
             ],
