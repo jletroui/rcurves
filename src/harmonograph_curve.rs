@@ -2,11 +2,13 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 use ggez::event::{Axis, Button, MouseButton};
-use ggez::GameResult;
+use ggez::{Context, GameResult};
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawParam, MeshBuilder};
-use crate::interactive_curve::{DrawableMeshFromBuilder, InteractiveCurve};
+use crate::utils;
+use crate::interactive_curve::{DrawData, InteractiveCurve};
 use crate::color_picker::{ColorPicker, HSV};
+use crate::interactive_curve::DrawData::Meshes;
 
 const PAPERX: usize = 0;
 const PAPERY: usize = 1;
@@ -86,8 +88,8 @@ impl Harmonograph {
                 (Axis::RightStickX, PENX),
                 (Axis::RightStickY, PENY),
             ].iter().cloned().collect(),
-            start_color_picker: ColorPicker::new(HSV::new(180.0, 0.75, 0.75)),
-            end_color_picker: ColorPicker::new(HSV::new(60.0, 0.75, 0.75)),
+            start_color_picker: ColorPicker::new(HSV::new(180.0, 0.75, 0.75), 1./3., Vec2::new(-1./4., 0.)),
+            end_color_picker: ColorPicker::new(HSV::new(60.0, 0.75, 0.75), 1./3., Vec2::new(1./4., 0.)),
         }
     }
 
@@ -105,40 +107,11 @@ impl Harmonograph {
         } else {
             1.0 - (t - PI) / PI
         };
-        let start_color = self.start_color_picker.color();
-        let end_color = self.end_color_picker.color();
-        let interpolate = |start: f32, end: f32| start + interpolation  * (end - start);
-        Color::new(
-            interpolate(start_color.r, end_color.r),
-            interpolate(start_color.g, end_color.g),
-            interpolate(start_color.b, end_color.b),
-            1.0
-        )
-    }
-
-    fn normalize(value: f32, upper: f32) -> f32 {
-        let norm = (value + 1.0) / 2.0;
-        return norm * upper;
-    }
-
-    fn adjust_start_color_for_axis(&mut self, axis: Axis, value: f32) {
-        match axis {
-            Axis::LeftStickX    => self.start_color_picker.adjust_hue(Harmonograph::normalize(value, 359.9)),
-            Axis::LeftStickY    => self.start_color_picker.adjust_saturation(1.0 - Harmonograph::normalize(value, 1.0)),
-            _ => ()
-        }
-    }
-
-    fn adjust_end_color_for_axis(&mut self, axis: Axis, value: f32) {
-        match axis {
-            Axis::LeftStickX    => self.end_color_picker.adjust_hue(Harmonograph::normalize(value, 359.9)),
-            Axis::LeftStickY    => self.end_color_picker.adjust_saturation(1.0 - Harmonograph::normalize(value, 1.0)),
-            _ => ()
-        }
+        utils::interpolate_color(&self.start_color_picker.color(), &self.end_color_picker.color(), interpolation)
     }
 
     fn adjust_amp_for_axis(&mut self, axis: Axis, value: f32) {
-        let new_value = Harmonograph::normalize(value, 1.0);
+        let new_value = utils::normalize(value, 1.0);
 
         match axis {
             Axis::LeftStickY => {
@@ -154,18 +127,34 @@ impl Harmonograph {
     }
 
     fn adjust_freq_for_axis(&mut self, axis: Axis, value: f32) {
-        let new_value = Harmonograph::normalize(value, 20.0).round() / 2.0;
+        let new_value = utils::normalize(value, 20.0).round() / 2.0;
         self.pendulums[*self.axis_to_pendulum.get(&axis).unwrap()].freq = new_value;
     }
 
     fn adjust_phase_for_axis(&mut self, axis: Axis, value: f32) {
-        let new_value = Harmonograph::normalize(value, PI / 2.0);
+        let new_value = utils::normalize(value, PI / 2.0);
         self.pendulums[*self.axis_to_pendulum.get(&axis).unwrap()].phase = new_value;
     }
 
     fn adjust_decay_for_axis(&mut self, axis: Axis, value: f32) {
-        let new_value = Harmonograph::normalize(value, 0.002);
+        let new_value = utils::normalize(value, 0.002);
         self.pendulums[*self.axis_to_pendulum.get(&axis).unwrap()].decay = new_value;
+    }
+
+    fn mut_displayed_color_picker(&mut self) -> Option<&mut ColorPicker> {
+        match self.displayed_param {
+            START_COLOR => Some(&mut self.start_color_picker),
+            END_COLOR => Some(&mut self.end_color_picker),
+            _ => None
+        }
+    }
+
+    fn displayed_color_picker(&self) -> Option<&ColorPicker> {
+        match self.displayed_param {
+            START_COLOR => Some(&self.start_color_picker),
+            END_COLOR => Some(&self.end_color_picker),
+            _ => None
+        }
     }
 }
 
@@ -194,7 +183,7 @@ impl Display for Harmonograph {
 }
 
 impl InteractiveCurve for Harmonograph {
-    fn meshes(&mut self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+    fn compute_drawables(&mut self, _ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
         let radius = size / 2.0;
         let mut builder = MeshBuilder::new();
         let mut previous_pt = self.point(radius.x, radius.y, 0.0);
@@ -204,24 +193,15 @@ impl InteractiveCurve for Harmonograph {
             builder.line(&[previous_pt, pt], 1.0, self.color(t))?;
             previous_pt = pt;
         }
-        let mesh = DrawableMeshFromBuilder::new(builder, DrawParam::new().dest(dest));
+        let meshes = Meshes(builder, DrawParam::new().dest(dest));
 
-        match self.displayed_param {
-            START_COLOR => {
-                let min_size = size.min_element();
-                let picker_size = min_size / 3.0;
-                let picker_dest = Vec2::new(dest.x - min_size / 4.0, dest.y);
-                let start_meshes = self.start_color_picker.meshes(picker_size, picker_dest)?;
-                Ok(vec!(mesh, start_meshes))
-            }
-            END_COLOR => {
-                let min_size = size.min_element();
-                let picker_size = min_size / 3.0;
-                let picker_dest = Vec2::new(dest.x + min_size / 4.0, dest.y);
-                let end_meshes = self.end_color_picker.meshes(picker_size, picker_dest)?;
-                Ok(vec!(mesh, end_meshes))
-            }
-            _ => Ok(vec!(mesh))
+        match self.mut_displayed_color_picker() {
+            Some(picker) => picker.set_view(size, dest),
+            None => ()
+        }
+        match self.displayed_color_picker() {
+            Some(picker) => Ok(vec!(meshes, picker.meshes()?)),
+            None => Ok(vec!(meshes))
         }
     }
 
@@ -230,11 +210,12 @@ impl InteractiveCurve for Harmonograph {
             Button::DPadLeft  => if self.displayed_param > 0 { self.displayed_param = self.displayed_param - 1 },
             Button::DPadRight => if self.displayed_param < 5 { self.displayed_param = self.displayed_param + 1 },
             Button::LeftTrigger | Button::RightTrigger => self.pinning_values = true,
-            Button::South if self.displayed_param == START_COLOR => self.start_color_picker.incr_value(-0.25),
-            Button::East if self.displayed_param == START_COLOR => self.start_color_picker.incr_value(0.25),
-            Button::South if self.displayed_param == END_COLOR => self.end_color_picker.incr_value(-0.25),
-            Button::East if self.displayed_param == END_COLOR => self.end_color_picker.incr_value(0.25),
             _ => ()
+        }
+
+        match self.mut_displayed_color_picker() {
+            Some(picker) => picker.adjust_for_button(btn),
+            None => (),
         }
     }
 
@@ -256,21 +237,20 @@ impl InteractiveCurve for Harmonograph {
                 FREQ => self.adjust_freq_for_axis(axis, value),
                 PHASE => self.adjust_phase_for_axis(axis, value),
                 DECAY => self.adjust_decay_for_axis(axis, value),
-                START_COLOR => self.adjust_start_color_for_axis(axis, value),
-                END_COLOR => self.adjust_end_color_for_axis(axis, value),
                 unknown => panic!("Tried to adjust unknown axis {} in Harmonograph", unknown),
+            }
+
+            match self.mut_displayed_color_picker() {
+                Some(picker) => picker.adjust_for_axis(axis, value),
+                None => (),
             }
         }
     }
 
-    fn adjust_for_mouse_button_up(self: &mut Self, button: MouseButton, x: f32, y: f32) {
-        if button == MouseButton::Left {
-            if self.displayed_param == START_COLOR {
-                self.start_color_picker.adjust_for_click(x, y);
-            }
-            if self.displayed_param == END_COLOR {
-                self.end_color_picker.adjust_for_click(x, y);
-            }
+    fn adjust_for_mouse_button_up(self: &mut Self, button: MouseButton, x: f32, y: f32, _drag_start: Vec2) {
+        match self.mut_displayed_color_picker() {
+            Some(picker) => picker.adjust_for_click(button, x, y),
+            None => (),
         }
     }
 

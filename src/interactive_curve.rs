@@ -1,43 +1,40 @@
 use std::fmt::Display;
 use ggez::event::{Button, Axis, MouseButton};
-use ggez::GameResult;
+use ggez::{Context, GameResult};
 use ggez::glam::Vec2;
-use ggez::graphics::{DrawParam, MeshBuilder, MeshData};
+use ggez::graphics::{DrawParam, Image as GImage, MeshBuilder};
+use ggez::input::keyboard::KeyInput;
 
-pub trait InteractiveCurve<T: DrawableMesh = DrawableMeshFromBuilder>: Display {
-    fn meshes(&mut self, dest: Vec2, size: Vec2) -> GameResult<Vec<T>>;
+pub trait InteractiveCurve: Display {
+    fn compute_drawables(&mut self, _ctx: &mut Context, _dest: Vec2, _size: Vec2) -> GameResult<Vec<DrawData>>;
+
     fn adjust_for_button(&mut self, btn: Button);
+
     fn adjust_for_axis(&mut self, _axis: Axis, _value: f32) {
         // Default do nothing
     }
-    fn adjust_for_mouse_button_up(&mut self, _button: MouseButton, _x: f32, _y: f32) {
+
+    fn adjust_for_mouse_button_up(&mut self, _button: MouseButton, _x: f32, _y: f32, _drag_start: Vec2) {
         // Default do nothing
     }
+
+    fn adjust_for_mouse_drag(&mut self, _x: f32, _y: f32, _drag_start: Vec2) {
+        // Default do nothing
+    }
+
+    fn adjust_for_mouse_wheel(&mut self, _x: f32, _y: f32, _wheel_y_dir: f32) {
+        // y is either 1 (one click away) or -1 (one click towards the user)
+        // Default do nothing
+    }
+
+    fn adjust_for_key_up(&mut self, _input: KeyInput) {
+        // Default do nothing
+    }
+
     fn screenshot_file_name(&self) -> String;
 }
 
-pub trait DrawableMesh {
-    fn meshes(&self) -> MeshData;
-    fn params(&self) -> DrawParam;
-}
-
-pub struct DrawableMeshFromBuilder {
-    builder: MeshBuilder,
-    params: DrawParam,
-}
-
-impl DrawableMeshFromBuilder {
-    pub fn new(builder: MeshBuilder, params: DrawParam) -> DrawableMeshFromBuilder {
-        DrawableMeshFromBuilder { builder, params }
-    }
-}
-
-impl DrawableMesh for DrawableMeshFromBuilder {
-    fn meshes(&self) -> MeshData {
-        self.builder.build()
-    }
-
-    fn params(&self) -> DrawParam {
-        self.params
-    }
+pub enum DrawData<'a> {
+    Meshes(MeshBuilder, DrawParam),
+    Image(&'a GImage, DrawParam)
 }

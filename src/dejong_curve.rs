@@ -2,10 +2,13 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 use ggez::event::{Axis, Button};
-use ggez::GameResult;
+use ggez::{Context, GameResult};
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawParam, MeshBuilder};
-use crate::interactive_curve::{DrawableMeshFromBuilder, InteractiveCurve};
+use crate::interactive_curve::{DrawData, InteractiveCurve};
+use crate::interactive_curve::DrawData::Meshes;
+
+// Inspiration: http://paulbourke.net/fractals/peterdejong/
 
 const EPSILON: f32 = 0.01;
 const MAX_TRIANGLES: u32 = 2_560_000;
@@ -62,18 +65,18 @@ impl Display for DeJongAttractor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "DE JONG   a {:<6.1} b {:<6.1} c {:<6.1} d {:<6.1}   iter {} (A / B)",
+            "DE JONG   a {:<6.1} b {:<6.1} c {:<6.1} d {:<6.1}   iter {} (A / B / Y)",
             self.a, self.b, self.c, self.d, self.nb_iter,
         )
     }
 }
 
 impl InteractiveCurve for DeJongAttractor {
-    fn meshes(&mut self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+    fn compute_drawables(&mut self, _ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
         let radius = size / 5.0;
-        let square_size = 1.0 / radius.min_element();
+        let tri_size = 1.0 / radius.min_element();
         let color = if self.nb_iter == 80000 { Color::BLACK } else { Color::new(0.3, 0.3, 0.3, 0.4) };
-        let mut result : Vec<DrawableMeshFromBuilder> = vec!();
+        let mut result : Vec<DrawData> = vec!();
         let mut pt = Vec2::new(0.0, 0.0);
         let n_batches = self.nb_iter / MAX_TRIANGLES + 1;
 
@@ -81,11 +84,11 @@ impl InteractiveCurve for DeJongAttractor {
             let mut builder = MeshBuilder::new();
             let mut n_triangles = 0;
             while batch_nb * MAX_TRIANGLES + n_triangles < self.nb_iter && n_triangles < MAX_TRIANGLES {
-                builder.triangles(&[pt, pt + Vec2::new(square_size, 0.0), pt + Vec2::new(0.0, square_size)], color)?;
+                builder.triangles(&[pt, pt + Vec2::new(tri_size, 0.0), pt + Vec2::new(0.0, tri_size)], color)?;
                 pt = self.next_point(pt);
                 n_triangles += 1;
             }
-            result.push(DrawableMeshFromBuilder::new(builder, DrawParam::new().dest(dest).scale(radius)));
+            result.push(Meshes(builder, DrawParam::new().dest(dest).scale(radius)));
         }
 
         Ok(result)

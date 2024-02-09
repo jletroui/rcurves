@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::fmt::{Display, Formatter};
 use ggez::event::Button;
-use ggez::GameResult;
+use ggez::{Context, GameResult};
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawParam, MeshBuilder};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use rstar::RTree;
-use crate::interactive_curve::{DrawableMeshFromBuilder, InteractiveCurve};
+use crate::interactive_curve::{DrawData, InteractiveCurve};
+use crate::interactive_curve::DrawData::Meshes;
 
 const TWO_PI: f32 = 2.0 * PI;
 const T_OFFSET: f32 = 0.012;
@@ -99,7 +100,7 @@ impl Display for Lissajou {
 }
 
 impl InteractiveCurve for Lissajou {
-    fn meshes(&mut self, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawableMeshFromBuilder>> {
+    fn compute_drawables(&mut self, _ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
         let point_index = self.points(size.x / 2.0, size.y / 2.0);
         let max_distance = size.x * self.max_distance_ratio;
         let max_distance2 = max_distance * max_distance;
@@ -122,7 +123,7 @@ impl InteractiveCurve for Lissajou {
             layers
                 .drain()
                 .map(|(z, builder)|
-                    DrawableMeshFromBuilder::new(builder, DrawParam::new().dest(dest).z(z))
+                    Meshes(builder, DrawParam::new().dest(dest).z(z))
                 )
                 .collect()
         )

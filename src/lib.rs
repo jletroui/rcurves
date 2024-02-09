@@ -4,15 +4,17 @@ mod interactive_curve;
 mod harmonograph_curve;
 mod lissajou_curve;
 mod dejong_curve;
+mod mandelbrot_curve;
 mod lissajou_app;
 mod color_picker;
+mod utils;
 
 use ggez::conf;
 use ggez::event;
 use ggez::GameResult;
 use lissajou_app::LissajouApp;
 
-const WINDOW_SIZE: f32 = 1792.0;
+const WINDOW_SIZE: f32 = 1024.0;
 
 pub fn run() -> GameResult {
     let (mut ctx, event_loop) = ggez::ContextBuilder::new("input_test", "ggez")

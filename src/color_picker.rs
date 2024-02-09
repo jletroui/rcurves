@@ -1,7 +1,10 @@
+use ggez::event::{Axis, Button, MouseButton};
 use ggez::GameResult;
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawMode, DrawParam, MeshBuilder, Rect};
-use crate::interactive_curve::DrawableMeshFromBuilder;
+use crate::interactive_curve::DrawData;
+use crate::interactive_curve::DrawData::Meshes;
+use crate::utils;
 
 const SPACE_SIZE: f32 = 0.75;
 const TARGET_SIZE: f32 = 0.02;
@@ -33,14 +36,18 @@ pub struct ColorPicker {
     current_pick: HSV,
     last_size: f32,
     last_dest: Vec2,
+    screen_size_ratio: f32,
+    screen_dest_ratio: Vec2,
 }
 
 impl ColorPicker {
-    pub fn new(current_pick: HSV) -> ColorPicker {
+    pub fn new(current_pick: HSV, screen_size_ratio: f32, screen_dest_ratio: Vec2) -> ColorPicker {
         ColorPicker {
             current_pick,
             last_size: 0.0,
             last_dest: Vec2::new(0.0, 0.0),
+            screen_size_ratio,
+            screen_dest_ratio,
         }
     }
 
@@ -73,10 +80,19 @@ impl ColorPicker {
         DrawParam::new().dest(left_top_dest).scale(scaling)
     }
 
-    pub fn meshes(&mut self, size: f32, dest: Vec2) -> GameResult<DrawableMeshFromBuilder> {
-        let mut builder = MeshBuilder::new();
+    pub fn set_view(&mut self, screen_size: Vec2, screen_dest: Vec2) {
+        let screen_min_size = screen_size.min_element();
+        let size = screen_min_size * self.screen_size_ratio;
+        let dest = Vec2::new(
+            screen_dest.x + screen_min_size * self.screen_dest_ratio.x,
+            screen_dest.y + screen_min_size * self.screen_dest_ratio.y,
+        );
         self.last_size = size;
         self.last_dest = dest;
+    }
+
+    pub fn meshes(&self) -> GameResult<DrawData> {
+        let mut builder = MeshBuilder::new();
 
         // Color space
         for hi in 0..STEPS_H {
@@ -100,35 +116,54 @@ impl ColorPicker {
         builder.rectangle(DrawMode::fill(), Rect::new(0.0, SPACE_SIZE + MARGIN, 1.0, 1.0 - SPACE_SIZE - MARGIN), picked_color)?;
         builder.rectangle(DrawMode::fill(), Rect::new(SPACE_SIZE + MARGIN, 0.0, 1.0 - SPACE_SIZE - MARGIN, SPACE_SIZE + MARGIN), picked_color)?;
 
-        Ok(DrawableMeshFromBuilder::new(builder, self.params(size, dest)))
+        Ok(Meshes(builder, self.params(self.last_size, self.last_dest)))
     }
 
     pub fn color(&self) -> Color {
         ColorPicker::from_hsv(&self.current_pick)
     }
 
-    pub fn adjust_hue(&mut self, hue: f32) {
+    fn adjust_hue(&mut self, hue: f32) {
         self.current_pick.hue = hue;
     }
 
-    pub fn adjust_saturation(&mut self, saturation: f32) {
+    fn adjust_saturation(&mut self, saturation: f32) {
         self.current_pick.saturation = saturation;
     }
 
-    pub fn adjust_for_click(&mut self, x: f32, y: f32) {
-        let left_top_dest = self.last_dest - self.last_size / 2.0;
-        let space_area = Rect::new(left_top_dest.x, left_top_dest.y, self.last_size * SPACE_SIZE, self.last_size * SPACE_SIZE);
-        if space_area.contains(Vec2::new(x, y)) {
-            let diff_x = x - left_top_dest.x;
-            let diff_y = y - left_top_dest.y;
-            self.adjust_hue(diff_x / (self.last_size * SPACE_SIZE) * 360.0);
-            self.adjust_saturation(diff_y / (self.last_size * SPACE_SIZE))
-        }
-    }
-
-    pub fn incr_value(&mut self, incr: f32) {
+    fn incr_value(&mut self, incr: f32) {
         if (self.current_pick.value > 0.0 && incr < 0.0) || (self.current_pick.value < 1.0 && incr > 0.0) {
             self.current_pick.value += incr;
         }
     }
+
+    pub fn adjust_for_button(self: &mut Self, btn: Button) {
+        match btn {
+            Button::South => self.incr_value(-0.25),
+            Button::East => self.incr_value(0.25),
+            _ => ()
+        }
+    }
+
+    pub fn adjust_for_axis(&mut self, axis: Axis, value: f32) {
+        match axis {
+            Axis::LeftStickX    => self.adjust_hue(utils::normalize(value, 359.9)),
+            Axis::LeftStickY    => self.adjust_saturation(1.0 - utils::normalize(value, 1.0)),
+            _ => ()
+        }
+    }
+
+    pub fn adjust_for_click(&mut self, button: MouseButton, x: f32, y: f32) {
+        if button == MouseButton::Left {
+            let left_top_dest = self.last_dest - self.last_size / 2.0;
+            let space_area = Rect::new(left_top_dest.x, left_top_dest.y, self.last_size * SPACE_SIZE, self.last_size * SPACE_SIZE);
+            if space_area.contains(Vec2::new(x, y)) {
+                let diff_x = x - left_top_dest.x;
+                let diff_y = y - left_top_dest.y;
+                self.adjust_hue(diff_x / (self.last_size * SPACE_SIZE) * 360.0);
+                self.adjust_saturation(diff_y / (self.last_size * SPACE_SIZE))
+            }
+        }
+    }
+
 }
