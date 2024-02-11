@@ -2,6 +2,7 @@ use ggez::event::{Axis, Button, MouseButton};
 use ggez::GameResult;
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawMode, DrawParam, MeshBuilder, Rect};
+use ggez::input::keyboard::{KeyCode, KeyInput};
 use crate::interactive_curve::DrawData;
 use crate::interactive_curve::DrawData::Meshes;
 use crate::utils;
@@ -33,6 +34,7 @@ impl HSV {
 }
 
 pub struct ColorPicker {
+    name: &'static str,
     current_pick: HSV,
     last_size: f32,
     last_dest: Vec2,
@@ -41,8 +43,9 @@ pub struct ColorPicker {
 }
 
 impl ColorPicker {
-    pub fn new(current_pick: HSV, screen_size_ratio: f32, screen_dest_ratio: Vec2) -> ColorPicker {
+    pub fn new(name: &'static str, current_pick: HSV, screen_size_ratio: f32, screen_dest_ratio: Vec2) -> ColorPicker {
         ColorPicker {
+            name,
             current_pick,
             last_size: 0.0,
             last_dest: Vec2::new(0.0, 0.0),
@@ -119,6 +122,10 @@ impl ColorPicker {
         Ok(Meshes(builder, self.params(self.last_size, self.last_dest)))
     }
 
+    fn disp(&self) {
+        println!("{}(hue: {} sat: {} val: {})", self.name, self.current_pick.hue, self.current_pick.saturation, self.current_pick.value);
+    }
+
     pub fn color(&self) -> Color {
         ColorPicker::from_hsv(&self.current_pick)
     }
@@ -145,6 +152,14 @@ impl ColorPicker {
         }
     }
 
+    pub fn adjust_for_key(self: &mut Self, key: KeyInput) {
+        match key.keycode {
+            Some(KeyCode::Down) => self.incr_value(-0.25),
+            Some(KeyCode::Up) => self.incr_value(0.25),
+            _ => ()
+        }
+    }
+
     pub fn adjust_for_axis(&mut self, axis: Axis, value: f32) {
         match axis {
             Axis::LeftStickX    => self.adjust_hue(utils::normalize(value, 359.9)),
@@ -161,7 +176,8 @@ impl ColorPicker {
                 let diff_x = x - left_top_dest.x;
                 let diff_y = y - left_top_dest.y;
                 self.adjust_hue(diff_x / (self.last_size * SPACE_SIZE) * 360.0);
-                self.adjust_saturation(diff_y / (self.last_size * SPACE_SIZE))
+                self.adjust_saturation(diff_y / (self.last_size * SPACE_SIZE));
+                self.disp();
             }
         }
     }

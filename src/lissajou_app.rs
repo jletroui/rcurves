@@ -13,7 +13,7 @@ use crate::interactive_curve::DrawData::{Image, Meshes};
 use crate::lissajou_curve::Lissajou;
 use crate::interactive_curve::InteractiveCurve;
 
-const MARGIN_PXL: f32 = 40.0;
+const MARGIN_PXL: f32 = 0.0;
 
 pub struct LissajouApp {
     curves: [Box<dyn InteractiveCurve>; 4],
@@ -118,12 +118,13 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         x: f32,
         y: f32,
     ) -> GameResult {
-        self.mouse_down = true;
-
         Ok(
             match button {
-                MouseButton::Left => self.drag_start = Vec2::new(x, y),
-                _ => self.drag_start = Vec2::new(0., 0.)
+                MouseButton::Left => {
+                    self.mouse_down = true;
+                    self.drag_start = Vec2::new(x, y)
+                },
+                _ => ()
             }
         )
     }

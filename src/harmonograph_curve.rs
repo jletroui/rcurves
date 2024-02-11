@@ -88,8 +88,8 @@ impl Harmonograph {
                 (Axis::RightStickX, PENX),
                 (Axis::RightStickY, PENY),
             ].iter().cloned().collect(),
-            start_color_picker: ColorPicker::new(HSV::new(180.0, 0.75, 0.75), 1./3., Vec2::new(-1./4., 0.)),
-            end_color_picker: ColorPicker::new(HSV::new(60.0, 0.75, 0.75), 1./3., Vec2::new(1./4., 0.)),
+            start_color_picker: ColorPicker::new("Start", HSV::new(180.0, 0.75, 0.75), 1./3., Vec2::new(-1./4., 0.)),
+            end_color_picker: ColorPicker::new("End", HSV::new(60.0, 0.75, 0.75), 1./3., Vec2::new(1./4., 0.)),
         }
     }
 
