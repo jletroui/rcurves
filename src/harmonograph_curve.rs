@@ -10,6 +10,7 @@ use crate::interactive_curve::{DrawData, InteractiveCurve};
 use crate::color_picker::{ColorPicker, HSV};
 use crate::interactive_curve::DrawData::Meshes;
 
+const SIZE_RATIO: f32 = 0.9;
 const PAPERX: usize = 0;
 const PAPERY: usize = 1;
 const PENX: usize = 2;
@@ -184,7 +185,7 @@ impl Display for Harmonograph {
 
 impl InteractiveCurve for Harmonograph {
     fn compute_drawables(&mut self, _ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
-        let radius = size / 2.0;
+        let radius = SIZE_RATIO * size / 2.0;
         let mut builder = MeshBuilder::new();
         let mut previous_pt = self.point(radius.x, radius.y, 0.0);
         for i in 0..NB_ITER {

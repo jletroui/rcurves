@@ -12,6 +12,7 @@ use crate::interactive_curve::DrawData::Meshes;
 
 const EPSILON: f32 = 0.01;
 const MAX_TRIANGLES: u32 = 2_560_000;
+const SIZE_RATIO: f32 = 0.9;
 
 pub struct DeJongAttractor {
     a: f32,
@@ -73,8 +74,8 @@ impl Display for DeJongAttractor {
 
 impl InteractiveCurve for DeJongAttractor {
     fn compute_drawables(&mut self, _ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
-        let radius = size / 5.0;
-        let tri_size = 1.0 / radius.min_element();
+        let radius = (SIZE_RATIO * size / 5.0).min_element();
+        let tri_size = 1.0 / radius;
         let color = if self.nb_iter == 80000 { Color::BLACK } else { Color::new(0.3, 0.3, 0.3, 0.4) };
         let mut result : Vec<DrawData> = vec!();
         let mut pt = Vec2::new(0.0, 0.0);
@@ -88,7 +89,7 @@ impl InteractiveCurve for DeJongAttractor {
                 pt = self.next_point(pt);
                 n_triangles += 1;
             }
-            result.push(Meshes(builder, DrawParam::new().dest(dest).scale(radius)));
+            result.push(Meshes(builder, DrawParam::new().dest(dest).scale(Vec2::new(radius, radius))));
         }
 
         Ok(result)

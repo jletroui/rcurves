@@ -20,6 +20,7 @@ const JITTER_FACTOR_INCREMENT: f32 = 0.002;
 const MAX_DISTANCE_RATIO_INCREMENT: f32 = 0.05;
 const FREQ_X: usize = 0;
 const FREQ_Y: usize = 1;
+const SIZE_RATIO: f32 = 0.9;
 
 pub struct Lissajou {
     freq: [f32; 2],
@@ -101,7 +102,8 @@ impl Display for Lissajou {
 
 impl InteractiveCurve for Lissajou {
     fn compute_drawables(&mut self, _ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
-        let point_index = self.points(size.x / 2.0, size.y / 2.0);
+        let min_size = size.min_element();
+        let point_index = self.points(SIZE_RATIO * min_size / 2.0, SIZE_RATIO * min_size / 2.0);
         let max_distance = size.x * self.max_distance_ratio;
         let max_distance2 = max_distance * max_distance;
         let mut layers = HashMap::new();

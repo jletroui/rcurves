@@ -3,6 +3,7 @@ use ggez::GameResult;
 use ggez::glam::Vec2;
 use ggez::graphics::{Color, DrawMode, DrawParam, MeshBuilder, Rect};
 use ggez::input::keyboard::{KeyCode, KeyInput};
+use ggegui::egui::Color32;
 use crate::interactive_curve::DrawData;
 use crate::interactive_curve::DrawData::Meshes;
 use crate::utils;
@@ -31,6 +32,38 @@ impl HSV {
         }
         HSV{ hue, saturation, value }
     }
+
+    pub fn rgb(hue: f32, saturation: f32, value: f32) -> (f32, f32, f32) {
+        // https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+        let c = value * saturation;
+        let m = value * (1.0 - saturation);
+        let x = c * (1.0 - f32::abs((hue / 60.0) % 2.0 - 1.0));
+        let (r, g, b) = match hue {
+            _ if 0.0   <= hue && hue < 60.0  => (c, x, 0.0),
+            _ if 60.0  <= hue && hue < 120.0 => (x, c, 0.0),
+            _ if 120.0 <= hue && hue < 180.0 => (0.0, c, x),
+            _ if 180.0 <= hue && hue < 240.0 => (0.0, x, c),
+            _ if 240.0 <= hue && hue < 300.0 => (x, 0.0, c),
+            _ if 300.0 <= hue && hue < 360.0 => (c, 0.0, x),
+            _ => panic!("h should be between 0 and 360")
+        };
+
+        (r + m, g + m, b + m)
+    }
+
+    pub fn color(hue: f32, saturation: f32, value: f32) -> Color {
+        let rgb = Self::rgb(hue, saturation, value);
+        Color::new(rgb.0, rgb.1, rgb.2, 1.0)
+    }
+
+    pub fn to_color(&self) -> Color {
+        Self::color(self.hue, self.saturation, self.value)
+    }
+
+    pub fn to_color32(&self) -> Color32 {
+        let (r, g, b) = Self::rgb(self.hue, self.saturation, self.value);
+        Color32::from_rgb((r * 255.).round() as u8, (g * 255.).round() as u8, (b * 255.).round() as u8)
+    }
 }
 
 pub struct ColorPicker {
@@ -52,29 +85,6 @@ impl ColorPicker {
             screen_size_ratio,
             screen_dest_ratio,
         }
-    }
-
-    fn from_hsv_components(hue: f32, saturation: f32, value: f32) -> Color {
-        // https://www.rapidtables.com/convert/color/hsv-to-rgb.html
-        let c = value * saturation;
-        let m = value * (1.0 - saturation);
-        let x = c * (1.0 - f32::abs((hue / 60.0) % 2.0 - 1.0));
-        let (r, g, b) = match hue {
-            _ if 0.0   <= hue && hue < 60.0  => (c, x, 0.0),
-            _ if 60.0  <= hue && hue < 120.0 => (x, c, 0.0),
-            _ if 120.0 <= hue && hue < 180.0 => (0.0, c, x),
-            _ if 180.0 <= hue && hue < 240.0 => (0.0, x, c),
-            _ if 240.0 <= hue && hue < 300.0 => (x, 0.0, c),
-            _ if 300.0 <= hue && hue < 360.0 => (c, 0.0, x),
-            _ => panic!("h should be between 0 and 360")
-        };
-
-        Color::new(r + m, g + m, b + m, 1.0)
-    }
-
-    fn from_hsv(hsv: &HSV) -> Color {
-        let HSV { hue, saturation, value } = hsv;
-        ColorPicker::from_hsv_components(*hue, *saturation, *value)
     }
 
     fn params(&self, size: f32, dest: Vec2) -> DrawParam {
@@ -104,7 +114,7 @@ impl ColorPicker {
                 let saturation = (si as f32) / (STEPS_V as f32);
                 let x = hue * STEPS_X;
                 let y = (si as f32) * STEPS_Y;
-                let color = ColorPicker::from_hsv_components(hue, saturation, self.current_pick.value);
+                let color = HSV::color(hue, saturation, self.current_pick.value);
                 builder.rectangle(DrawMode::fill(), Rect::new(x, y, STEPS_X, STEPS_Y), color)?;
             }
         }
@@ -115,7 +125,7 @@ impl ColorPicker {
         builder.rectangle(DrawMode::fill(), Rect::new(SPACE_SIZE, (1.0 - self.current_pick.value) * SPACE_SIZE, MARGIN, TARGET_STROKE_WIDTH), TARGET_COLOR)?;
 
         // Picked color
-        let picked_color = ColorPicker::from_hsv(&self.current_pick);
+        let picked_color = self.current_pick.to_color();
         builder.rectangle(DrawMode::fill(), Rect::new(0.0, SPACE_SIZE + MARGIN, 1.0, 1.0 - SPACE_SIZE - MARGIN), picked_color)?;
         builder.rectangle(DrawMode::fill(), Rect::new(SPACE_SIZE + MARGIN, 0.0, 1.0 - SPACE_SIZE - MARGIN, SPACE_SIZE + MARGIN), picked_color)?;
 
@@ -127,7 +137,11 @@ impl ColorPicker {
     }
 
     pub fn color(&self) -> Color {
-        ColorPicker::from_hsv(&self.current_pick)
+        self.current_pick.to_color()
+    }
+
+    pub fn color32(&self) -> Color32 {
+        self.current_pick.to_color32()
     }
 
     fn adjust_hue(&mut self, hue: f32) {

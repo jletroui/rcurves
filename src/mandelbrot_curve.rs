@@ -1,14 +1,15 @@
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::panic;
 use std::time::Instant;
-use ggez::event::{Axis, Button, MouseButton};
+use ggez::event::MouseButton;
 use ggez::{Context, GameResult};
 use ggez::glam::{DVec2, Vec2};
 use ggez::glam::i32::IVec2;
-use ggez::graphics::{Color, DrawMode, DrawParam, Image as GImage, ImageFormat, MeshBuilder, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Image as GImage, ImageFormat, MeshBuilder};
 use ggez::input::keyboard::{KeyCode, KeyInput};
 use rayon::prelude::*;
+use ggegui::egui;
+use ggegui::egui::{RichText, Ui};
 use crate::utils;
 use crate::color_picker::{ColorPicker, HSV};
 use crate::interactive_curve::{DrawData, InteractiveCurve};
@@ -24,18 +25,9 @@ const DARK_GREY: Color = Color {
 };
 
 // Params constants
-const VALUE_EPSILON: f32 = 0.01;
-const ZOOM_PAN: usize = 0;
-const MAX_ITERATIONS: usize = 1;
-const OUT_COLOR: usize = 2;
-const ALMOST_IN_COLOR: usize = 3;
-const PARAM_NAMES: [&'static str; 4] = [
-    "< [pan]  iter   outColor   almostInColor >",
-    "<  pan  [iter]  outColor   almostInColor >",
-    "<  pan   iter  [outColor]  almostInColor >",
-    "<  pan   iter   outColor  [almostInColor]>",
-];
-const PAN_STEP_PCT: f64 = 0.1;
+const MAX_ITERATIONS_PARAM: usize = 0;
+const OUT_COLOR_PARAM: usize = 1;
+const ALMOST_IN_COLOR_PARAM: usize = 2;
 const ZOOM_STEP_PCT: f64 = 0.25;
 const DEFAULT_BOX_LEFT_X: f64 = -2.;
 const DEFAULT_BOX_RIGHT_X: f64 = 0.5;
@@ -56,7 +48,15 @@ const KNOW_CIRCLES: [KnownCircle; 3] = [
     KnownCircle::new(DVec2::new(-0.125, -0.744), 0.092 * 0.092, 2.),
     KnownCircle::new(DVec2::new(-1.308, 0.0), 0.058 * 0.058, 2.),
 ];
-
+const REMARKABLE_POINTS: [(DVec2, &str); 7] = [
+    (DVec2::new(DEFAULT_BOX_LEFT_X + DEFAULT_SPAN / 2., 0.), "Défaut"),
+    (DVec2::new(-1.401155, 0.), "Feigenbaum"),
+    (DVec2::new(-0.743643887037151, 0.13182590420533), "Vallée hippocampes"),
+    (DVec2::new(-1.749214022, -0.000289489), "Mini mandelbrot à gauche"),
+    (DVec2::new(-0.1649200283, -1.0369146835), "En haut, mini Julia"),
+    (DVec2::new(-1.4838688322327218, 0.0000000000000003), "Ligne à gauche"),
+    (DVec2::new(0.3621185521154, -0.4261009708377), "Cheveux frisés en haut à droite"),
+];
 struct IterationResult {
     iterations: usize,
     smooth: f64,
@@ -99,34 +99,30 @@ impl KnownCircle {
 
 #[derive(Clone)]
 struct ViewBox {
-    screen_min_x_i: i32,
-    screen_min_y_i: i32,
+    screen_min_i: IVec2,
     screen_center: Vec2,
     screen_size_i: IVec2,
     box_center: DVec2,
-    box_size: f64,
+    box_size: DVec2,
     box_screen_ratio: f64,
     pixel_count: usize,
 }
 
 impl ViewBox {
     fn zero() -> Self {
-        Self::from_center_size(Vec2::ZERO, Vec2::ZERO, DVec2::ZERO, 0.)
+        Self::from_center_size(Vec2::ZERO, Vec2::ZERO, DVec2::ZERO, DVec2::ZERO)
     }
 
-    fn from_center_size(screen_center: Vec2, screen_size: Vec2, box_center: DVec2, box_size: f64) -> Self {
-        let screen_radius = screen_size.x / 2.;
-        let box_screen_ratio = box_size / (screen_size.x as f64);
-        let screen_size_i = IVec2::new(screen_size.x.round() as i32, screen_size.y.round() as i32);
+    fn from_center_size(screen_center: Vec2, screen_size: Vec2, box_center: DVec2, box_size: DVec2) -> Self {
+        let screen_size_i = screen_size.round().as_ivec2();
 
         return Self {
-            screen_min_x_i: (screen_center.x - screen_radius).round() as i32,
-            screen_min_y_i: (screen_center.y - screen_radius).round() as i32,
+            screen_min_i: (screen_center - screen_size / 2.).round().as_ivec2(),
             screen_center,
             screen_size_i,
             box_center,
             box_size,
-            box_screen_ratio,
+            box_screen_ratio: box_size.x / (screen_size.x as f64),
             pixel_count: (screen_size_i.x * screen_size_i.y) as usize,
         }
     }
@@ -136,8 +132,8 @@ impl ViewBox {
         let screen_shift_y = (pixel_index as i32) / self.screen_size_i.x;
 
         self.mandel_point(
-            self.screen_min_x_i + screen_shift_x,
-            self.screen_min_y_i + screen_shift_y
+            self.screen_min_i.x + screen_shift_x,
+            self.screen_min_i.y + screen_shift_y
         )
     }
 
@@ -158,7 +154,7 @@ impl ViewBox {
 
     fn screen_pixel_index(self: &Self, screen_x: f32, screen_y: f32) -> usize {
         // For displaying selected point info
-        ((screen_x - self.screen_min_x_i as f32) + (screen_y - self.screen_min_y_i as f32) * (self.screen_size_i.x as f32)).round() as usize
+        ((screen_x - self.screen_min_i.x as f32) + (screen_y - self.screen_min_i.x as f32) * (self.screen_size_i.x as f32)).round() as usize
     }
 
     fn size_changed(self: &Self, other: &ViewBox) -> bool {
@@ -345,102 +341,68 @@ impl MandelIterator {
     }
 }
 
-
 #[derive(Clone, Copy)]
 struct PointDetail(DVec2, usize);
 
 pub struct MandelbrotSet {
     iteration_rate: f32,
     compute_time_ms: [u128; 5],
-    colors: Vec<Color>,
     pixels: Vec<u8>,
     img: Option<GImage>,
     iteration_counts: Vec<f32>,
     histogram: Vec<usize>,
     box_center: DVec2,
-    box_size: f64,
+    box_size: DVec2,
     max_iterations: usize,
     last_colors: [Color; 2],
     last_max_iterations: usize,
     last_view_box: ViewBox,
-    last_use_smooth: bool,
     out_color_picker: ColorPicker,
     almost_in_color_picker: ColorPicker,
     displayed_param: usize,
-    values: HashMap<Axis, f32>,
-    pinning_values: bool,
     escape_radius2: f64,
     show_histogram: bool,
-    show_known_circles: bool,
-    use_smooth: bool,
     drag_translation: Vec2,
     show_point_details: Option<PointDetail>,
+    selected_remarkable_point: usize,
 }
 
 impl MandelbrotSet {
     pub fn new() -> Self {
         let max_iterations = DEFAULT_MAX_ITERATIONS;
+        let default_location = REMARKABLE_POINTS[0].0;
         Self {
             iteration_rate: 0.,
             compute_time_ms: [0; 5],
-            colors: vec![Color::BLACK; max_iterations + 1],
             pixels: vec![],
             img: None,
             iteration_counts: vec![],
             histogram: vec![0usize; max_iterations],
-            box_center: DVec2::new(DEFAULT_BOX_LEFT_X + DEFAULT_SPAN/2., 0.),
-            box_size: DEFAULT_SPAN,
+            box_center: default_location,
+            box_size: DVec2::new(DEFAULT_SPAN, DEFAULT_SPAN),
             max_iterations,
             last_colors: [Color::BLACK; 2],
             last_max_iterations: 0,
             last_view_box: ViewBox::zero(),
-            last_use_smooth: false,
             out_color_picker: ColorPicker::new("Out", HSV::new(236., 0.96, 0.94), 1./2., Vec2::new(-1./5., 0.)),
             almost_in_color_picker: ColorPicker::new("Almost in", HSV::new(30.0, 0.91, 1.09),1./2., Vec2::new(1./5., 0.)),
-            displayed_param: ZOOM_PAN,
-            values: HashMap::new(),
-            pinning_values: false,
+            displayed_param: MAX_ITERATIONS_PARAM,
             escape_radius2: ESCAPE_RADIUS * ESCAPE_RADIUS,
             show_histogram: false,
-            show_known_circles: false,
-            use_smooth: true,
             drag_translation: Vec2::ZERO,
             show_point_details: None,
+            selected_remarkable_point: 0,
         }
     }
 
-    fn reset(&mut self) {
-        let box_size = DEFAULT_BOX_RIGHT_X - DEFAULT_BOX_LEFT_X;
-        self.box_center = DVec2::new(DEFAULT_BOX_LEFT_X + box_size/2., 0.);
-        self.box_size = DEFAULT_BOX_RIGHT_X - DEFAULT_BOX_LEFT_X;
+    fn reset_to_remarkable_point(&mut self) {
+        self.box_center = REMARKABLE_POINTS[self.selected_remarkable_point].0;
+        self.box_size = DVec2::new(DEFAULT_SPAN, DEFAULT_SPAN);
+        self.max_iterations = 100;
     }
 
     fn iterator(&self) -> MandelIterator {
         MandelIterator::new(self.max_iterations, self.escape_radius2)
-    }
-
-    fn fill_colors(&mut self) {
-        if self.colors.len() != self.max_iterations + 2 {
-            self.colors = vec![Color::BLACK; self.max_iterations + 1];
-        }
-        let histogram_total = self.histogram.iter().fold(0usize, |a, b| a + b) as f32;
-        let mut running_total = 0.;
-        let ratio = std::f32::consts::PI * (self.max_iterations as f32) / 100.;
-        for i in 0..self.max_iterations {
-            self.colors[i] = utils::interpolate_color(
-                &self.almost_in_color_picker.color(),
-                &self.out_color_picker.color(),
-                f32::abs(f32::sin(ratio * running_total / histogram_total)),
-            );
-            running_total += self.histogram[i] as f32;
-        }
-    }
-
-    fn adjust_pan(&mut self, x_dir: i8, y_dir: i8) {
-        let step = self.box_size * PAN_STEP_PCT;
-        let translation = DVec2::new((x_dir as f64)*step, (y_dir as f64)*step);
-        self.box_center += translation;
-        self.show_point_details = None;
     }
 
     fn adjust_zoom(&mut self, dir: i8) {
@@ -454,16 +416,16 @@ impl MandelbrotSet {
 
     fn displayed_color_picker(&self) -> Option<&ColorPicker> {
         match self.displayed_param {
-            OUT_COLOR => Some(&self.out_color_picker),
-            ALMOST_IN_COLOR => Some(&self.almost_in_color_picker),
+            OUT_COLOR_PARAM => Some(&self.out_color_picker),
+            ALMOST_IN_COLOR_PARAM => Some(&self.almost_in_color_picker),
             _ => None
         }
     }
 
     fn displayed_color_picker_mut(&mut self) -> Option<&mut ColorPicker> {
         match self.displayed_param {
-            OUT_COLOR => Some(&mut self.out_color_picker),
-            ALMOST_IN_COLOR => Some(&mut self.almost_in_color_picker),
+            OUT_COLOR_PARAM => Some(&mut self.out_color_picker),
+            ALMOST_IN_COLOR_PARAM => Some(&mut self.almost_in_color_picker),
             _ => None
         }
     }
@@ -473,7 +435,6 @@ impl MandelbrotSet {
         self.last_colors[1] = self.almost_in_color_picker.color();
         self.last_max_iterations = self.max_iterations;
         self.last_view_box = view_box;
-        self.last_use_smooth = self.use_smooth;
     }
 
     fn need_recreate_pixel_cache(&self, view_box: &ViewBox) -> bool {
@@ -484,8 +445,7 @@ impl MandelbrotSet {
         self.need_recreate_pixel_cache(view_box) ||
         self.last_view_box.box_center != self.box_center ||
         self.last_view_box.box_size != self.box_size ||
-        self.last_max_iterations != self.max_iterations ||
-        self.last_use_smooth != self.use_smooth
+        self.last_max_iterations != self.max_iterations
     }
 
     fn need_recompute_image(&self, view_box: &ViewBox) -> bool {
@@ -497,12 +457,7 @@ impl MandelbrotSet {
         let palette_size: f32 = 20.;
         let histogram_size: f32 = 200.;
         let mut builder = MeshBuilder::new();
-        let step = size.x / (self.colors.len() as f32) ;
-
-        for i in 0..self.colors.len() {
-            let x = (i as f32)*step;
-            builder.rectangle(DrawMode::fill(), Rect::new(x, 0., step, palette_size), self.colors[i])?;
-        }
+        let step = size.x / (self.max_iterations as f32) ;
         let mut prev_point = Vec2::new(step / 2., 0.);
         let hist_max = self.histogram.iter().fold(0, |a, b| if a > *b { a } else { *b }) as f32;
         for i in 1..self.histogram.len() {
@@ -521,19 +476,6 @@ impl MandelbrotSet {
         }
 
         Ok(Meshes(builder, DrawParam::new().dest(dest - size / 2.)))
-    }
-
-    fn draw_known_circles(&self, dest: Vec2, size: Vec2) -> GameResult<DrawData> {
-        let mut builder = MeshBuilder::new();
-        let view_box = ViewBox::from_center_size(dest, size, self.box_center, self.box_size);
-
-        for circle in KNOW_CIRCLES {
-            let pixel = view_box.screen_pixel(&circle.center);
-            let radius = (f64::sqrt(circle.radius2) / view_box.box_screen_ratio) as f32;
-            builder.circle(DrawMode::stroke(10.), pixel, radius, 1., Color::RED)?;
-        }
-
-        Ok(Meshes(builder, DrawParam::new()))
     }
 
     fn draw_center_target(&self, dest: Vec2) -> GameResult<DrawData> {
@@ -565,23 +507,80 @@ impl MandelbrotSet {
 
 impl Display for MandelbrotSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "MANDEL {}  zoom: {:.2e} dwell: {} time: {}ms iter: {:.1}% point iters: {}",
-            PARAM_NAMES[self.displayed_param],
-            DEFAULT_SPAN / self.box_size,
-            self.max_iterations,
-            self.compute_time_ms[0],
-            self.iteration_rate * 100.,
-            match self.show_point_details {
-                Some(pt) => self.iteration_counts[pt.1],
-                _ => 0.
-            }
-        )
+        write!(f, "Ensemble de Mandelbrot")
     }
 }
 
 impl InteractiveCurve for MandelbrotSet {
+    fn update_ui(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Dwell:");
+            if ui.button("-").clicked() {
+                self.max_iterations /= 2;
+            }
+            ui.label(format!("{}", self.max_iterations));
+            if ui.button("+").clicked() {
+                self.max_iterations *= 2;
+            }
+        });
+        ui.checkbox(&mut self.show_histogram, "Histogramme");
+        if ui.button(RichText::new("Couleur 1").background_color(self.out_color_picker.color32())).clicked() {
+            self.displayed_param = match self.displayed_param {
+                OUT_COLOR_PARAM => MAX_ITERATIONS_PARAM,
+                _ => OUT_COLOR_PARAM
+            };
+        }
+        if ui.button(RichText::new("Couleur 2").background_color(self.almost_in_color_picker.color32())).clicked() {
+            self.displayed_param = match self.displayed_param {
+                ALMOST_IN_COLOR_PARAM => MAX_ITERATIONS_PARAM,
+                _ => ALMOST_IN_COLOR_PARAM
+            };
+        }
+        ui.horizontal(|ui| {
+            ui.label("Départ:");
+            egui::ComboBox::from_id_source("remarkable_points")
+                .selected_text(format!("{}", REMARKABLE_POINTS[self.selected_remarkable_point].1))
+                .show_ui(ui, |ui| {
+                    ui.style_mut().wrap = Some(false);
+                    ui.set_min_width(60.0);
+                    REMARKABLE_POINTS.iter().enumerate().for_each(|(i, (_, pt_name))| {
+                        ui.selectable_value(&mut self.selected_remarkable_point, i, *pt_name);
+                    });
+                });
+            if ui.button("Aller").clicked() {
+                self.reset_to_remarkable_point();
+            }
+        });
+        ui.separator();
+        egui::Grid::new("mandel_info")
+            .num_columns(2)
+            .spacing([40.0, 4.0])
+            .striped(true)
+            .show(ui, |ui| {
+                ui.label("Position:");
+                ui.label(format!("{:.5} , {:.5}", self.box_center.x, self.box_center.y));
+                ui.end_row();
+                ui.label("Zoom:");
+                ui.label(format!("{:.2e}", DEFAULT_SPAN / self.box_size.x));
+                ui.end_row();
+                ui.label("Temps calcul:");
+                ui.label(format!("{} ms", self.compute_time_ms[0]));
+                ui.end_row();
+                ui.label("Points calculés:");
+                ui.label(format!("{:.1} %", self.iteration_rate * 100.));
+                ui.end_row();
+
+                match self.show_point_details {
+                    Some(pt) => {
+                        ui.label("Itérations au point:");
+                        ui.label(format!("{}",self.iteration_counts[pt.1]));
+                        ui.end_row();
+                    },
+                    _ => ()
+                }
+            });
+    }
+
     fn compute_drawables(&mut self, ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
         let start = Instant::now();
         let view_box = ViewBox::from_center_size(dest, size, self.box_center, self.box_size);
@@ -599,11 +598,7 @@ impl InteractiveCurve for MandelbrotSet {
                 .map(|(i, iter_count)| {
                     let c = view_box.mandel_point_from_index(i);
                     let iteration_result = iterator.iter_to_divergence(c);
-                    if self.use_smooth {
-                        *iter_count = iteration_result.iterations as f32 + iteration_result.smooth as f32;
-                    } else {
-                        *iter_count = iteration_result.iterations as f32;
-                    }
+                    *iter_count = iteration_result.iterations as f32 + iteration_result.smooth as f32;
                     iteration_result
                 })
                 .fold(
@@ -624,7 +619,7 @@ impl InteractiveCurve for MandelbrotSet {
         if self.need_recompute_image(&view_box) {
             let fill_start = Instant::now();
             let colors = [self.out_color_picker.color(), Color::WHITE, self.almost_in_color_picker.color(), DARK_GREY, self.out_color_picker.color()];
-            self.fill_colors();
+
             self.pixels
                 .par_iter_mut()
                 .chunks(4)
@@ -695,10 +690,6 @@ impl InteractiveCurve for MandelbrotSet {
             result.push(self.draw_histogram(dest, size)?);
         }
 
-        if self.show_known_circles {
-            result.push(self.draw_known_circles(dest, size)?);
-        }
-
         if self.drag_translation != Vec2::ZERO {
             result.push(self.draw_center_target(dest)?);
         }
@@ -706,48 +697,6 @@ impl InteractiveCurve for MandelbrotSet {
         result.push(Image(self.img.as_ref().unwrap(), DrawParam::new().z(-1).dest((dest - size / 2.) + self.drag_translation)));
 
         Ok(result)
-    }
-
-    fn adjust_for_button(self: &mut Self, btn: Button) {
-        match btn {
-            Button::DPadLeft  => if self.displayed_param > 0 { self.displayed_param = self.displayed_param - 1 },
-            Button::DPadRight => if self.displayed_param < PARAM_NAMES.len() { self.displayed_param = self.displayed_param + 1 },
-            Button::LeftTrigger | Button::RightTrigger => self.pinning_values = true,
-            Button::DPadUp if self.displayed_param == ZOOM_PAN  => self.adjust_zoom(-1),
-            Button::DPadDown if self.displayed_param == ZOOM_PAN => self.adjust_zoom(1),
-            Button::South if self.displayed_param == ZOOM_PAN => self.adjust_pan(0, 1),
-            Button::North if self.displayed_param == ZOOM_PAN => self.adjust_pan(0, -1),
-            Button::West if self.displayed_param == ZOOM_PAN => self.adjust_pan(-1, 0),
-            Button::East if self.displayed_param == ZOOM_PAN => self.adjust_pan(1, 0),
-            Button::South if self.displayed_param == MAX_ITERATIONS => self.max_iterations /= 2,
-            Button::East if self.displayed_param == MAX_ITERATIONS => self.max_iterations *= 2,
-            _ => ()
-        }
-
-        match self.displayed_color_picker_mut() {
-            Some(picker) => picker.adjust_for_button(btn),
-            None => (),
-        }
-    }
-
-    fn adjust_for_axis(self: &mut Self, axis: Axis, value: f32) {
-        self.values.insert(axis, value);
-
-        if self.pinning_values {
-            let all_zeroes = self.values.values().all(|v| v.abs() < VALUE_EPSILON);
-            if all_zeroes {
-                self.pinning_values = false;
-            }
-            else {
-                return
-            }
-        }
-        else {
-            match self.displayed_color_picker_mut() {
-                Some(picker) => picker.adjust_for_axis(axis, value),
-                None => (),
-            }
-        }
     }
 
     fn adjust_for_mouse_button_up(self: &mut Self, button: MouseButton, x: f32, y: f32, drag_start: Vec2) {
@@ -779,19 +728,18 @@ impl InteractiveCurve for MandelbrotSet {
     }
 
     fn adjust_for_mouse_wheel(&mut self, _x: f32, _y: f32, wheel_y_dir: f32) {
-        self.adjust_zoom(-wheel_y_dir.round() as i8);
+        if f32::abs(wheel_y_dir) >= 0.5 {
+            self.adjust_zoom((-wheel_y_dir / wheel_y_dir) as i8);
+        }
     }
 
     fn adjust_for_key_up(&mut self, input: KeyInput) {
         match input.keycode {
-            Some(KeyCode::Left)  => if self.displayed_param > 0 { self.displayed_param = self.displayed_param - 1 },
-            Some(KeyCode::Right) => if self.displayed_param < PARAM_NAMES.len() { self.displayed_param = self.displayed_param + 1 },
-            Some(KeyCode::Up) => if self.displayed_param < 2 { self.max_iterations *= 2 },
-            Some(KeyCode::Down) => if self.displayed_param < 2 { self.max_iterations /= 2 },
-            Some(KeyCode::R) => self.reset(),
+            Some(KeyCode::Escape) => self.displayed_param = MAX_ITERATIONS_PARAM,
+            Some(KeyCode::R) => self.reset_to_remarkable_point(),
             Some(KeyCode::H) => self.show_histogram = !self.show_histogram,
-            Some(KeyCode::C) => self.show_known_circles = !self.show_known_circles,
-            Some(KeyCode::S) => self.use_smooth = !self.use_smooth,
+            Some(KeyCode::Z) => self.adjust_zoom(-1),
+            Some(KeyCode::X) => self.adjust_zoom(1),
             _ => ()
         }
 
