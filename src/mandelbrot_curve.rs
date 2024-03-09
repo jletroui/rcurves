@@ -579,6 +579,12 @@ impl InteractiveCurve for MandelbrotSet {
                     _ => ()
                 }
             });
+        ui.separator();
+        ui.label("[clic droit]: calcul au point");
+        ui.label("[Z]: zoomer");
+        ui.label("[X]: dézoomer");
+        ui.label("[R]: zoom à 0");
+        ui.label("[H]: histogramme");
     }
 
     fn compute_drawables(&mut self, ctx: &mut Context, dest: Vec2, size: Vec2) -> GameResult<Vec<DrawData>> {
