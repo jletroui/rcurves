@@ -760,4 +760,12 @@ impl InteractiveCurve for MandelbrotSet {
             "mandel_{}", self.max_iterations
         )
     }
+
+    fn name(&self) -> &str {
+        "Ensemble Mandelbrot"
+    }
+
+    fn inspiration_url(&self) -> &str {
+        "https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set"
+    }
 }

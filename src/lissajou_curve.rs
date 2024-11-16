@@ -159,4 +159,12 @@ impl InteractiveCurve for Lissajou {
             self.freq[FREQ_X], self.freq[FREQ_Y], self.phase, self.nb_points, self.jitter_factor, self.max_distance_ratio
         )
     }
+
+    fn name(&self) -> &str {
+        "Courbe de Lissajou"
+    }
+
+    fn inspiration_url(&self) -> &str {
+        "https://www.bit-101.com/2017/2022/11/coding-curves-04-lissajous-curves/"
+    }
 }

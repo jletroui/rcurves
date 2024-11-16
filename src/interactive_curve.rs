@@ -38,6 +38,10 @@ pub trait InteractiveCurve: Display {
     }
 
     fn screenshot_file_name(&self) -> String;
+
+    fn name(&self) -> &str;
+
+    fn inspiration_url(&self) -> &str;
 }
 
 pub enum DrawData<'a> {

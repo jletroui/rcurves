@@ -20,7 +20,7 @@ const SIDE_PANEL_WIDTH_PX: f32 = 256.;
 
 pub struct LissajouApp {
     curves: [Box<dyn InteractiveCurve>; 4],
-    curve: usize,
+    curve_index: usize,
     screen: graphics::ScreenImage,
     mouse_pos: Vec2,
     drag_start: Vec2,
@@ -37,7 +37,7 @@ impl LissajouApp {
                 Box::new(Harmonograph::new()),
                 Box::new(MandelbrotSet::new()),
             ],
-            curve: 3,
+            curve_index: 0,
             screen: graphics::ScreenImage::new(ctx, graphics::ImageFormat::Rgba8UnormSrgb, 1., 1., 1),
             mouse_pos: Vec2::new(0., 0.),
             drag_start: Vec2::new(0., 0.),
@@ -47,7 +47,7 @@ impl LissajouApp {
     }
 
     fn curve(&mut self) -> &mut Box<dyn InteractiveCurve> {
-        &mut self.curves[self.curve]
+        &mut self.curves[self.curve_index]
     }
 
     fn save_screenshot(&mut self, ctx: &mut Context) {
@@ -76,7 +76,8 @@ impl LissajouApp {
     }
 }
 
-impl event::EventHandler<ggez::GameError> for LissajouApp {
+impl event::EventHandler<GameError> for LissajouApp {
+
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         ctx.gfx.window().set_title(&format!("{}", self.curve()));
 
@@ -88,7 +89,21 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         gui_ctx.set_style(style);
         egui::SidePanel::left("main_side_panel")
             .exact_width(256.)
-            .show(&gui_ctx, |ui|  self.curve().update_ui(ui));
+            .show(&gui_ctx, |ui|  {
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(self.curve_index > 0, egui::Button::new("<")).clicked() {
+                        self.curve_index -= 1;
+                    }
+                    let curve = self.curve();
+                    ui.hyperlink_to(curve.name(), curve.inspiration_url());
+                    if ui.add_enabled(self.curve_index < (self.curves.len() - 1), egui::Button::new(">")).clicked() {
+                        self.curve_index += 1;
+                    }
+                });
+                ui.separator();
+
+                self.curve().update_ui(ui);
+            });
         self.gui.update(ctx);
 
         Ok(())
@@ -178,10 +193,10 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
     fn key_up_event(&mut self, _ctx: &mut Context, input: KeyInput) -> GameResult {
         Ok(
             match input.keycode {
-                Some(KeyCode::Numpad1) | Some(KeyCode::Key1) => self.curve = 0,
-                Some(KeyCode::Numpad2) | Some(KeyCode::Key2) => self.curve = 1,
-                Some(KeyCode::Numpad3) | Some(KeyCode::Key3) => self.curve = 2,
-                Some(KeyCode::Numpad4) | Some(KeyCode::Key4) => self.curve = 3,
+                Some(KeyCode::Numpad1) | Some(KeyCode::Key1) => self.curve_index = 0,
+                Some(KeyCode::Numpad2) | Some(KeyCode::Key2) => self.curve_index = 1,
+                Some(KeyCode::Numpad3) | Some(KeyCode::Key3) => self.curve_index = 2,
+                Some(KeyCode::Numpad4) | Some(KeyCode::Key4) => self.curve_index = 3,
                 _ => self.curve().adjust_for_key_up(input)
             }
 
@@ -196,7 +211,7 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
     ) -> GameResult {
         Ok(
             match btn {
-                Button::Select => self.curve = (self.curve + 1) % self.curves.len(),
+                Button::Select => self.curve_index = (self.curve_index + 1) % self.curves.len(),
                 Button::Start => self.save_screenshot(ctx),
                 _ => self.curve().adjust_for_button(btn)
             }
@@ -215,12 +230,12 @@ impl event::EventHandler<ggez::GameError> for LissajouApp {
         )
     }
 
-    fn resize_event(&mut self, _ctx: &mut Context, width: f32, height: f32) -> GameResult {
-        Ok(self.gui.input.resize_event(width, height))
-    }
-
     fn quit_event(&mut self, _ctx: &mut Context) -> Result<bool, GameError> {
         // Do not quit on [Escape] being pressed.
         Ok(_ctx.keyboard.is_key_pressed(VirtualKeyCode::Escape))
+    }
+
+    fn resize_event(&mut self, _ctx: &mut Context, width: f32, height: f32) -> GameResult {
+        Ok(self.gui.input.resize_event(width, height))
     }
 }

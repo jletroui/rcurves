@@ -264,4 +264,12 @@ impl InteractiveCurve for Harmonograph {
             self.pendulums[PENY].amp, self.pendulums[PENY].freq, self.pendulums[PENY].phase, self.pendulums[PENY].decay
         )
     }
+
+    fn name(&self) -> &str {
+        "Harmonographe"
+    }
+
+    fn inspiration_url(&self) -> &str {
+        "https://www.bit-101.com/2017/2022/11/coding-curves-05-harmonographs/"
+    }
 }
